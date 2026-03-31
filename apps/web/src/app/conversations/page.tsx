@@ -1,7 +1,5 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
 import { useAuth } from '@/lib/supabase/auth-provider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
