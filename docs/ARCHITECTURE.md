@@ -301,32 +301,184 @@ The `/sandbox` page supports multiple simultaneous test conversations via tabs:
 
 ## 5. Database Schema
 
-All schema changes via `supabase/migrations/` numbered files. Never edit via Supabase UI.
+All schema changes via numbered migrations in `supabase/migrations/`. Never edit tables via Supabase UI.
 
-### Key Tables
+**Status:** ✅ Migration `001_create_core_tables` applied
+
+### Core Tables with Columns
+
+#### **hotels**
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Auto-generated |
+| `slug` | TEXT UNIQUE | URL-friendly identifier |
+| `name` | TEXT | Hotel display name |
+| `config` | JSONB | Cloudbeds OAuth tokens, persona settings |
+| `created_at` | TIMESTAMP | Auto-set |
+| `updated_at` | TIMESTAMP | Auto-set |
+
+#### **users** (extends `auth.users`)
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | FK → `auth.users.id` |
+| `hotel_id` | UUID | FK → `hotels.id` |
+| `email` | TEXT | From auth.users |
+| `role` | TEXT | admin, staff, room_service, housekeeping, manager |
+| `push_subscription` | JSONB | Web Push subscription (endpoint, keys) |
+| `created_at` | TIMESTAMP | Auto-set |
+| `updated_at` | TIMESTAMP | Auto-set |
+
+#### **guests**
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Auto-generated |
+| `hotel_id` | UUID | FK → `hotels.id` |
+| `channel` | TEXT | whatsapp, instagram, messenger, sandbox |
+| `channel_user_id` | TEXT | Chat ID from Meta API |
+| `name` | TEXT | Guest name (nullable) |
+| `phone` | TEXT | Phone number |
+| `email` | TEXT | Email (nullable) |
+| `created_at` | TIMESTAMP | Auto-set |
+| `updated_at` | TIMESTAMP | Auto-set |
+| **UNIQUE** | `(hotel_id, channel, channel_user_id)` | Dedup per channel |
+
+#### **conversations**
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Auto-generated |
+| `hotel_id` | UUID | FK → `hotels.id` |
+| `guest_id` | UUID | FK → `guests.id` |
+| `channel` | TEXT | whatsapp, instagram, messenger, sandbox |
+| `status` | TEXT | active, resolved, inactive, human_active |
+| `language` | TEXT | 'es' or 'en' (detected per turn) |
+| `booking_session_id` | UUID | Link to active booking (nullable) |
+| `assigned_to` | UUID | Staff ID if human_active (nullable) |
+| `last_message` | TEXT | Last message preview |
+| `last_message_at` | TIMESTAMP | For sorting |
+| `unread_count` | INTEGER | Count of unread messages |
+| `created_at` | TIMESTAMP | Auto-set |
+| `updated_at` | TIMESTAMP | Auto-set |
+| **INDEX** | `(hotel_id, last_message_at DESC)` | Dashboard list speed |
+
+#### **messages**
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Auto-generated |
+| `conversation_id` | UUID | FK → `conversations.id` |
+| `role` | TEXT | user, assistant, system |
+| `content` | TEXT | Message text |
+| `channel_message_id` | TEXT | Meta WABA message ID (for dedup) |
+| `tool_calls` | JSONB | LLM tool invocations (array) |
+| `created_at` | TIMESTAMP | Auto-set |
+| **INDEX** | `(conversation_id, created_at DESC)` | Thread speed |
+
+#### **reservations**
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Auto-generated |
+| `hotel_id` | UUID | FK → `hotels.id` |
+| `guest_id` | UUID | FK → `guests.id` |
+| `conversation_id` | UUID | FK → `conversations.id` |
+| `cloudbeds_reservation_id` | TEXT | PMS ID |
+| `check_in_date` | DATE | Booking check-in |
+| `check_out_date` | DATE | Booking check-out |
+| `room_type` | TEXT | "Standard", "Suite", etc. |
+| `num_guests` | INTEGER | Number of guests |
+| `num_rooms` | INTEGER | Rooms reserved |
+| `currency` | TEXT | MXN, USD, etc. |
+| `amount_total` | DECIMAL | Full booking price |
+| `amount_payment` | DECIMAL | Actual payment (deposit or full) |
+| `payment_percentage` | INTEGER | 100 (full) or 50 (deposit) |
+| `status` | TEXT | pending, confirmed, cancelled, no_show |
+| `payment_status` | TEXT | unpaid, pending, paid, failed |
+| `payment_link` | TEXT | Cloudbeds hosted payment URL |
+| `payment_link_expires_at` | TIMESTAMP | Link TTL (30 min) |
+| `confirmed_at` | TIMESTAMP | When payment confirmed |
+| `created_at` | TIMESTAMP | Auto-set |
+| `updated_at` | TIMESTAMP | Auto-set |
+| **INDEX** | `(hotel_id, status)` | Filter by status |
+
+#### **orders** (Room Service)
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Auto-generated |
+| `hotel_id` | UUID | FK → `hotels.id` |
+| `conversation_id` | UUID | FK → `conversations.id` (nullable) |
+| `guest_id` | UUID | FK → `guests.id` |
+| `room_number` | INTEGER | Guest room number |
+| `items` | JSONB | `[{name, quantity, notes}]` |
+| `notes` | TEXT | Special requests |
+| `status` | TEXT | pending, preparing, ready, delivered, cancelled |
+| `created_at` | TIMESTAMP | Auto-set |
+| `updated_at` | TIMESTAMP | Auto-set |
+| **INDEX** | `(hotel_id, status)` | Order list speed |
+
+#### **tasks** (Housekeeping, Maintenance)
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Auto-generated |
+| `hotel_id` | UUID | FK → `hotels.id` |
+| `conversation_id` | UUID | FK → `conversations.id` (nullable) |
+| `type` | TEXT | cleaning, maintenance, repair |
+| `room_number` | INTEGER | Room to service |
+| `description` | TEXT | Task details |
+| `priority` | TEXT | low, normal, high, urgent |
+| `status` | TEXT | pending, in_progress, completed, cancelled |
+| `assigned_to` | UUID | Staff ID (nullable) |
+| `created_at` | TIMESTAMP | Auto-set |
+| `updated_at` | TIMESTAMP | Auto-set |
+| `completed_at` | TIMESTAMP | When task finished |
+| **INDEX** | `(hotel_id, status)` | Task list speed |
+
+#### **escalations**
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Auto-generated |
+| `hotel_id` | UUID | FK → `hotels.id` |
+| `conversation_id` | UUID | FK → `conversations.id` |
+| `type` | TEXT | complaint, room_service_issue, maintenance, booking_question, payment_issue |
+| `description` | TEXT | Escalation reason |
+| `claimed_by` | UUID | Staff ID (nullable) |
+| `claimed_at` | TIMESTAMP | When staff claimed (nullable) |
+| `resolved_at` | TIMESTAMP | When resolved (nullable) |
+| `created_at` | TIMESTAMP | Auto-set |
+| `updated_at` | TIMESTAMP | Auto-set |
+| **INDEX** | `(hotel_id, created_at DESC)` | Escalation list |
+
+#### **knowledge_base** (RAG with pgvector)
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | UUID PK | Auto-generated |
+| `hotel_id` | UUID | FK → `hotels.id` |
+| `title` | TEXT | Document title |
+| `content` | TEXT | Full content text |
+| `category` | TEXT | hotel_info, room_amenities, policies, nearby |
+| `embedding` | vector(1536) | OpenAI text-embedding-3-small |
+| `created_at` | TIMESTAMP | Auto-set |
+| `updated_at` | TIMESTAMP | Auto-set |
+| **INDEX** | `(embedding) IVFFLAT` | Vector search speed |
+
+### Row Level Security (RLS)
+
+**Pattern:** All tables have RLS enabled. Staff can only read data in their own hotel.
 
 ```sql
-hotels          -- hotel_id, slug, name, config (includes Cloudbeds tokens)
-users           -- extends auth.users, role, push_subscription
-guests          -- channel (whatsapp|instagram|messenger|sandbox), channel_user_id
-conversations   -- status, language, booking_session_id, assigned_to
-messages        -- role (user|assistant|system), channel_message_id
-reservations    -- full booking data, Cloudbeds IDs, payment status, amounts
-orders          -- room service: items (jsonb), status
-tasks           -- type, description, status, assigned_to
-escalations     -- type, claimed_by, claimed_at, resolved_at
-knowledge_base  -- content, embedding (vector 1536), category
+-- Example for any table with hotel_id
+CREATE POLICY "table_read_hotel" ON public.[table]
+  FOR SELECT
+  USING (hotel_id = (SELECT hotel_id FROM public.users WHERE id = auth.uid()));
 ```
 
-RLS on every table. Pattern:
-```sql
-alter table [table] enable row level security;
-create policy "hotel_isolation" on [table]
-  for all using (hotel_id = (select hotel_id from users where id = auth.uid()));
-```
+- **Agent (service role key)**: Bypasses all RLS
+- **Dashboard (anon key)**: Must pass RLS checks
 
-Agent uses Supabase service role key (bypasses RLS).
-Dashboard uses Supabase anon key (must pass RLS).
+### Real-time Subscriptions
+
+Supabase Realtime enabled on:
+- `messages` — Thread updates live as guest/agent respond
+- `reservations` — Payment webhook updates confirmed status
+- `orders` — Room service status changes visible to kitchen + guest
+- `escalations` — New escalations appear in real-time
 
 ---
 

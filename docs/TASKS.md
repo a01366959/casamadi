@@ -24,9 +24,8 @@
 - [x] Create GitHub Actions workflows
 - [x] Create `railway.toml` in `apps/agent`
 - [x] Create `README.md`
-- [ ] Add Inter Tight font to `apps/dashboard/src/app/layout.tsx`
+- [x] Create `.env.local` files for both apps
 - [ ] Add `TooltipProvider` + `Toaster` to root layout
-- [ ] Set up shadcn MCP in VS Code
 - [ ] Verify TypeScript compiles with zero errors in all packages
 - [ ] Fix Vercel build configuration for monorepo
 
@@ -38,17 +37,20 @@
 - [ ] Generate VAPID keys: `npx web-push generate-vapid-keys`
 - [ ] Generate sandbox secret: `openssl rand -hex 32`
 - [ ] Create Supabase project `casamadi-prod` (enable pgvector)
-- [ ] Create Supabase project `casamadi-test` (enable pgvector)
+- [x] Create Supabase project `casamadi-test` (enable pgvector)
 - [ ] Create Upstash Redis DB `casamadi-prod`
-- [ ] Create Upstash Redis DB `casamadi-test`
+- [x] Create Upstash Redis DB `casamadi-test`
 - [ ] Create Railway project + `agent-production` service (branch: main)
 - [ ] Create Railway project + `agent-test` service (branch: develop)
 - [ ] Import repo to Vercel, set root: `apps/dashboard`
 - [ ] Fix Vercel build commands (see below)
-- [ ] Create OpenRouter account + API key + add $20-50 credit
+- [x] Create OpenRouter account + API key + add $20-50 credit
 - [ ] Create Resend account + verify domain
-- [ ] Add all secrets to GitHub Actions (see MANUAL_TASKS.md)
-- [ ] Create first admin user in `casamadi-test` Supabase project
+- [ ] Fill `.env.local` files with real test values
+- [ ] Add secrets to GitHub Actions (see instructions below)
+- [ ] Add secrets to Railway (see instructions below)
+- [ ] Add secrets to Vercel (see instructions below)
+- [x] Create first admin user in `casamadi-test` Supabase project
 
 ### Vercel Fix (Blocker)
 
@@ -71,6 +73,108 @@ If Vercel keeps ignoring settings, add to repo root:
 
 ---
 
+### GitHub Actions Secrets (Detailed Instructions)
+
+**Purpose:** GitHub Actions runs workflows to deploy to Railway (agent) and Vercel (dashboard).
+
+**How to add:**
+1. Go to repo → Settings → Secrets and variables → Actions
+2. Click "New repository secret"
+3. Add each secret below (name MUST match exactly):
+
+**Agent Secrets (Railway deploys):**
+```
+SUPABASE_URL=https://your-test-project.supabase.co
+SUPABASE_ANON_KEY=eyJhbGc...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...
+UPSTASH_REDIS_REST_URL=https://...
+UPSTASH_REDIS_REST_TOKEN=...
+OPENROUTER_API_KEY=sk-or-...
+CLOUDBEDS_CLIENT_ID=...
+CLOUDBEDS_CLIENT_SECRET=...
+META_VERIFY_TOKEN=your-token
+META_PHONE_NUMBER_ID=...
+META_ACCESS_TOKEN=...
+RESEND_API_KEY=re_...
+VAPID_PUBLIC_KEY=BF...
+VAPID_PRIVATE_KEY=p8...
+SANDBOX_SECRET=...
+RAILWAY_API_TOKEN=... (from railway.app → Account → API Tokens)
+```
+
+**Dashboard Secrets (Vercel deploys):**
+```
+VERCEL_TOKEN=... (from vercel.com → Account → Tokens)
+VERCEL_ORG_ID=... (from Vercel project settings)
+VERCEL_PROJECT_ID=... (from Vercel project settings)
+NEXT_PUBLIC_SUPABASE_URL=https://your-test-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGc...
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=BF...
+```
+
+---
+
+### Railway Secrets (Detailed Instructions)
+
+**Purpose:** Railway runs the Fastify agent and needs credentials to connect to services.
+
+**How to add:**
+1. Go to railway.app → Your project → agent-test service
+2. Click "Variables" tab
+3. Add each secret below:
+
+**Required Environment Variables:**
+```
+SUPABASE_URL=https://your-test-project.supabase.co
+SUPABASE_ANON_KEY=eyJhbGc...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...
+UPSTASH_REDIS_REST_URL=https://...
+UPSTASH_REDIS_REST_TOKEN=...
+OPENROUTER_API_KEY=sk-or-...
+CLOUDBEDS_CLIENT_ID=...
+CLOUDBEDS_CLIENT_SECRET=...
+META_VERIFY_TOKEN=your-token
+META_PHONE_NUMBER_ID=...
+META_ACCESS_TOKEN=...
+RESEND_API_KEY=re_...
+VAPID_PUBLIC_KEY=BF...
+VAPID_PRIVATE_KEY=p8...
+SANDBOX_SECRET=...
+NODE_ENV=production
+PORT=3000
+```
+
+**How to deploy:**
+1. Connect your GitHub repo to Railway
+2. Set branch to `develop` for agent-test
+3. On every push to `develop` → Railway auto-deploys agent
+
+---
+
+### Vercel Secrets (Detailed Instructions)
+
+**Purpose:** Vercel runs the Next.js dashboard and needs Supabase credentials.
+
+**How to add:**
+1. Go to vercel.com → Your project → Settings → Environment Variables
+2. Add each secret below (must mark as Production + Preview):
+
+**Required Environment Variables:**
+```
+NEXT_PUBLIC_SUPABASE_URL=https://your-test-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGc...
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=BF...
+```
+
+**How to deploy:**
+1. Connect your GitHub repo to Vercel
+2. Set root directory to `apps/dashboard`
+3. On every push to `develop` → Vercel auto-deploys preview
+4. Preview URL appears in PR comments
+
+---
+
+**Production Setup (later):** Add main branch deployment separately with prod environment variables.
 ## Epic 1 — Agent Core + Cloudbeds Auth
 
 ### Code Tasks (Copilot)
@@ -146,10 +250,22 @@ If Vercel keeps ignoring settings, add to repo root:
 
 ### Code Tasks (Copilot)
 
-- [ ] Implement login page (login-01 block + Resend magic link)
-- [ ] Implement role-based sidebar (sidebar-07 block)
-- [ ] Implement route protection in `middleware.ts`
-- [ ] Implement conversation list with real-time updates
+- [x] Implement login page with password authentication
+- [x] Implement role-based sidebar (sidebar-07 block)
+- [x] Implement route protection in `middleware.ts`
+- [x] Implement dashboard home page with KPIs and real-time updates
+  - [x] Sidebar collapse behavior (proper shadcn pattern with `group-data-[state=collapsed]/sidebar:hidden`)
+  - [x] Loading skeletons (Skeleton component library)
+  - [x] Spanish translations (centralized in `@/lib/spanish` constant)
+  - [x] i18n documentation (`docs/I18N.md`)
+- [x] Implement conversation list with real-time updates
+  - [x] DataTable with columns: channel, guest name, room, last message, status
+  - [x] Search/filter by name, phone, or room number
+  - [x] Real-time Supabase subscription
+  - [x] Unread badge + status indicators
+  - [x] Mobile responsive table
+  - [x] Loading skeletons and empty states
+  - [x] Component patterns & guidelines documentation (`docs/COMPONENT_PATTERNS.md`)
 - [ ] Implement conversation thread with message bubbles
 - [ ] Implement `BookingPanel` component
 - [ ] Implement `TakeoverBar` (take over / return to AI)
@@ -158,12 +274,13 @@ If Vercel keeps ignoring settings, add to repo root:
 - [ ] Implement push notification subscription flow
 - [ ] Implement bottom tab bar for mobile
 - [ ] Implement dashboard home (dashboard-01 block + charts)
+- [ ] Implement magic link login (later iteration)
 
 ### Manual Tasks (You)
 
 - [ ] Configure Supabase Auth SMTP → use Resend
 - [ ] Create staff users in `casamadi-test`
-- [ ] Test magic link login on real phone
+- [ ] Test password login on real phone
 
 ---
 
