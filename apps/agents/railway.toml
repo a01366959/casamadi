@@ -1,6 +1,6 @@
 # Railway config for @casamadi/agents
-# Service root: apps/agents
-# This service is part of a monorepo - need to build from repo root
+# Service root: . (repo root)
+# This ensures pnpm-lock.yaml is available
 
 [nixpacks]
 providers = ["node"]
@@ -9,9 +9,9 @@ providers = ["node"]
 pkgName = "pnpm"
 
 [build]
-# Go to monorepo root, install, and build
+# Install all deps and build the agent
 buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @casamadi/agents build"
 
 [start]
-# Run the compiled agent
-runCommand = "node dist/index.js"
+# Start the agent from dist
+runCommand = "node apps/agents/dist/index.js"
