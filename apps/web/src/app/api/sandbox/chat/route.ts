@@ -2,28 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, message } = await request.json();
+    const { message, sessionId, phone } = await request.json();
 
-    if (!sessionId || !message) {
+    if (!message) {
       return NextResponse.json(
-        { success: false, error: 'Missing sessionId or message' },
+        { success: false, error: 'Missing required field: message' },
         { status: 400 }
       );
     }
 
-    // Call the agent backend with sandbox flag
-    const agentUrl = process.env.NEXT_PUBLIC_AGENT_URL || 'http://localhost:3001';
+    // Generate phone from sessionId if not provided
+    const finalPhone = phone || `+1${Math.floor(Math.random() * 9000000000) + 1000000000}`;
+
+    // Call the agent backend
+    const agentUrl = process.env.NEXT_PUBLIC_AGENT_URL || 'http://localhost:5001';
     
     const response = await fetch(`${agentUrl}/api/sandbox/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-sandbox-key': process.env.SANDBOX_API_KEY || 'sandbox-key',
       },
       body: JSON.stringify({
-        sessionId,
+        hotel_id: 'bernal',
+        phone: finalPhone,
         message,
-        hotelId: 'hotel-bernal', // demo hotel
+        channel: 'sandbox',
       }),
     });
 
@@ -39,6 +42,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       reply: data.reply || 'No response',
+      language: data.language,
       toolCalls: data.toolCalls || [],
     });
   } catch (error) {
