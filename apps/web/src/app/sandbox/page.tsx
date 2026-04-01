@@ -81,6 +81,7 @@ interface Message {
 interface SandboxSession {
   id: string;
   name: string;
+  phone: string;
   messages: Message[];
   createdAt: Date;
 }
@@ -121,14 +122,16 @@ export default function SandboxPage() {
 
   const createNewSession = () => {
     const id = `session-${Date.now()}`;
+    const phone = `+1${Math.floor(Math.random() * 9000000000) + 1000000000}`;
     const newSession: SandboxSession = {
       id,
       name: `Test ${sessions.length + 1}`,
+      phone,
       messages: [
         {
           id: 'init-1',
           role: 'system',
-          content: 'Sandbox session started. Testing agent in Spanish.',
+          content: `Sandbox session started (Phone: ${phone}). Testing agent in Spanish.`,
           timestamp: new Date(),
         },
       ],
@@ -175,7 +178,8 @@ export default function SandboxPage() {
       // Call agent via /api/sandbox/chat
       const response = await fetch('/api/sandbox/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        hehotel_id: 'bernal',
+          phone: activeSession?.phone || '+15551234567'application/json' },
         body: JSON.stringify({
           sessionId: activeSessionId,
           message: messageInput,

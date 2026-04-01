@@ -14,7 +14,8 @@ WORKDIR /app
 COPY . .
 
 # Install all dependencies using pnpm from repo root
-RUN pnpm install --frozen-lockfile
+# Use --no-frozen-lockfile for Railway (service root is apps/agents, so pnpm-lock.yaml not directly available)
+RUN pnpm install --no-frozen-lockfile
 
 # Build only the agent package
 RUN pnpm --filter @casamadi/agents build
