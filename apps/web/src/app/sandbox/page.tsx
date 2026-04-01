@@ -178,10 +178,10 @@ export default function SandboxPage() {
       // Call agent via /api/sandbox/chat
       const response = await fetch('/api/sandbox/chat', {
         method: 'POST',
-        hehotel_id: 'bernal',
-          phone: activeSession?.phone || '+15551234567'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId: activeSessionId,
+          hotel_id: 'bernal',
+          phone: activeSession?.phone || '+15551234567',
           message: messageInput,
         }),
       });
