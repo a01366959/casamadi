@@ -3,6 +3,7 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,21 +49,17 @@ export const columns: ColumnDef<StaffUser>[] = [
   {
     id: 'select',
     header: ({ table }) => (
-      <input
-        type="checkbox"
+      <Checkbox
         checked={table.getIsAllPageRowsSelected()}
-        onChange={table.getToggleAllPageRowsSelectedHandler()}
+        onCheckedChange={table.getToggleAllPageRowsSelectedHandler()}
         aria-label="Select all"
-        className="accent-primary h-4 w-4 rounded border-gray-300"
       />
     ),
     cell: ({ row }) => (
-      <input
-        type="checkbox"
+      <Checkbox
         checked={row.getIsSelected()}
-        onChange={row.getToggleSelectedHandler()}
+        onCheckedChange={row.getToggleSelectedHandler()}
         aria-label="Select row"
-        className="accent-primary h-4 w-4 rounded border-gray-300"
       />
     ),
     enableSorting: false,

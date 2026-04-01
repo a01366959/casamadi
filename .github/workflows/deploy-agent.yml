@@ -1,0 +1,40 @@
+name: Deploy Agent to Railway
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'apps/agents/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+
+env:
+  RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "service=casamadi-staging" >> $GITHUB_OUTPUT
+            echo "env_name=staging" >> $GITHUB_OUTPUT
+          else
+            echo "service=casamadi" >> $GITHUB_OUTPUT
+            echo "env_name=production" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to Railway (${{ steps.env.outputs.env_name }})
+        run: |
+          curl -fsSL https://railway.app/install.sh | sh
+          railway link ${{ secrets.RAILWAY_PROJECT_ID }}
+          railway service ${{ steps.env.outputs.service }}
+          railway up --service ${{ steps.env.outputs.service }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

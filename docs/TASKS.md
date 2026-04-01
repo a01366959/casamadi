@@ -175,6 +175,99 @@ NEXT_PUBLIC_VAPID_PUBLIC_KEY=BF...
 ---
 
 **Production Setup (later):** Add main branch deployment separately with prod environment variables.
+
+---
+
+## Epic 0.5 — Agent Sandbox Bootstrap (Completed ✅)
+
+### Code Tasks (Copilot)
+
+**Purpose:** Create a working agent that can be tested via dashboard sandbox before Meta webhook integration.
+
+- [x] Create `apps/agents/src/index.ts` (Fastify bootstrap with health endpoints)
+- [x] Create `apps/agents/src/services/logger.ts` (Pino structured JSON logging)
+- [x] Create `apps/agents/src/services/supabase.ts` (DB queries for conversations, messages)
+- [x] Create `apps/agents/src/services/redis.ts` (Upstash dedup + queue stubs)
+- [x] Create `apps/agents/src/agent/languageDetector.ts` (ES/EN detection + system prompts)
+- [x] Create `apps/agents/src/agent/runner.ts` (conversation orchestration)
+- [x] Create `apps/agents/src/routes/sandbox.ts` (POST /api/sandbox/chat + simulate-payment)
+- [x] Create `.env` template in `apps/agents/`
+- [x] Update `apps/agents/package.json` with dependencies (@upstash/redis, fastify, dotenv, pino)
+- [x] Verify TypeScript builds with zero errors
+- [x] Create `apps/agents/README.md` with architecture docs
+
+### API Endpoints (Ready)
+
+**Health:**
+```
+GET /health → { status, timestamp, uptime }
+GET /health/detailed → { status, services: { redis, supabase } }
+```
+
+**Sandbox (Testing):**
+```
+POST /api/sandbox/chat
+{
+  "hotel_id": "hotel-bernal",
+  "phone": "525551234567",
+  "message": "¿Hay disponibilidad?",
+  "message_id": "msg_123" (optional, auto-generated)
+}
+→ Response: { success: true, message_id, reply, language }
+
+POST /api/sandbox/simulate-payment
+{
+  "hotel_id": "hotel-bernal",
+  "reservation_id": "res_123",
+  "status": "completed" | "failed",
+  "amount": 2500
+}
+→ Response: { success: true }
+```
+
+### Features Implemented
+
+✅ **Supabase Integration:**
+- Get/create conversations
+- Store incoming messages (role: 'user')
+- Store agent replies (role: 'assistant')
+- Retrieve conversation history (last 20 messages)
+- Update conversation metadata (language, status, tags)
+
+✅ **Language Detection:**
+- Detects Spanish or English from incoming messages
+- Uses stop-word heuristics + character detection (¿ ¡ ñ á é í ó ú)
+- Switches from Spanish → English permanently (never back)
+- Generates bilingual system prompts
+
+✅ **Agent Runner:**
+- Loads conversation context
+- Detects language per message
+- Generates stub replies (echo bot for now)
+- Stores replies to database
+- Returns reply + detected language
+
+✅ **Redis (Optional):**
+- Message deduplication (no double-processing)
+- Graceful fallback if Redis unavailable
+- 5-minute TTL on dedup keys
+
+✅ **HTTP Contract:**
+- All endpoints return 202 Accepted within 200ms per hard rule
+- Async message processing (fire and forget)
+- Proper error handling + logging
+
+### Next Steps (Epic 1 — Agent Core)
+
+- [ ] Implement OpenRouter integration (replace stub replies)
+- [ ] Implement Meta webhook GET verification (hub challenge)
+- [ ] Implement Meta webhook POST handler (HMAC-SHA256 verification)
+- [ ] Implement Cloudbeds OAuth token management
+- [ ] Implement booking state machine
+- [ ] Connect to real Meta Cloud API
+
+---
+
 ## Epic 1 — Agent Core + Cloudbeds Auth
 
 ### Code Tasks (Copilot)
@@ -326,6 +419,201 @@ NEXT_PUBLIC_VAPID_PUBLIC_KEY=BF...
 - [ ] Upgrade `casamadi-prod` Supabase to paid plan
 - [ ] QA full booking flow end-to-end with real guest phone
 - [ ] Hotel Bernal go-live
+
+---
+
+## Epic 7 — Dashboard Platform Pages (All Staff, Role-Gated)
+
+### Prerequisite
+- [ ] Create database tables: `pedidos`, `tareas`, `menu_items`, `inventario_items`, `rooms`
+- [ ] Add RLS policies to all new tables (anon key test access)
+- [ ] Update `packages/db` with new table clients and queries
+
+### 3.2 Conversaciones Page
+- [ ] Implement conversation list with real-time updates (Supabase subscription)
+- [ ] Add channel badge (WhatsApp, Instagram, Messenger)
+- [ ] Add status indicator (active, escalated, takeover, closed)
+- [ ] Add tag display (Lead, Huésped, Evento)
+- [ ] Implement conversation search/filter by name, phone, room
+- [ ] Implement "Take Over" button with duration dialog (1h, 1d, 1w, 1m, Always)
+- [ ] When takeover active: show "Release to Agent" button instead
+- [ ] Implement escalation badge + reason
+- [ ] Auto-dismiss escalation flag after staff takes over
+- [ ] Add real-time message subscription to conversation detail
+- [ ] Show conversation timeline (all messages)
+- [ ] Display guest profile panel (name, phone, email, booking status)
+- [ ] Implement Message bubbles (staff messages vs guest messages)
+- [ ] Add staff reply box (sends via Meta API)
+
+### 3.3 Pedidos Page
+- [ ] Create pedidos list/Kanban board view
+- [ ] Show: room #, items, status, assigned staff, delivery deadline
+- [ ] Implement filters: by status, by room, by staff
+- [ ] "Assign" button (dropdown to select staff) — Recepción/Admin only
+- [ ] "Reject" button (only if kitchen closed or item unavailable) — Recepción/Admin only
+- [ ] When rejected: auto-message guest via agent + suggest alternative
+- [ ] "Mark as Delivered" button (staff on kitchen)
+- [ ] Add notes field (staff can add context)
+- [ ] Real-time update when status changes
+- [ ] Show average delivery time metric
+
+### 3.4 Tareas Page
+- [ ] Create tareas list view (table or Kanban)
+- [ ] Show: room #, task type, status, assigned staff, completion time
+- [ ] Implement filters: by status, by room, by type, by staff
+- [ ] "Assign" button (dropdown) — Recepción/Admin only
+- [ ] "Reject" button (only if can't fulfill) — Recepción/Admin only
+- [ ] When rejected: restore inventory if applicable, notify Recepción
+- [ ] "Mark as Done" button (any staff)
+- [ ] When marked done: auto-update inventory status if applicable (busy → returned)
+- [ ] Add notes field
+- [ ] Real-time inventory sync on task completion
+- [ ] Show completion rate metric
+- [ ] Show average completion time
+
+### 3.5 Menu Page
+- [ ] Create menu list view (grouped by section: Desayuno, Comida/Cena, 24/7)
+- [ ] Display per item: name, description, price, prep time, status (active/inactive)
+- [ ] Toggle on/off button for each item (Recepción/Admin can toggle, General read-only)
+- [ ] Show weekly reset schedule (Monday 00:00)
+- [ ] Add notes: "All items auto-reactivate every Monday"
+- [ ] Display kitchen hours (if applicable)
+- [ ] Show real-time availability (based on current time and item status)
+- [ ] "Add New Item" button (Admin only) — opens form
+- [ ] Form: name, description, price, section, prep time
+- [ ] Save → persist to database → immediately available to agent
+- [ ] Edit/Delete item buttons (Admin only)
+
+### 3.6 Inventario (Staff View) Page
+- [ ] Create inventory list view
+- [ ] Display per item: name, total qty, available qty, busy qty, status
+- [ ] Show "Busy" details: room #, qty, since when
+- [ ] Toggle on/off button (Recepción/Admin can toggle, General can only mark busy/returned)
+- [ ] "Mark as Busy" button (when staff delivers to room)
+- [ ] "Mark as Returned" button (when staff picks up from room)
+- [ ] Show reorder threshold alerts (red flag if available < threshold)
+- [ ] "Add New Item" button (Admin only) — opens form
+- [ ] Form: name, locations, qty, reorder threshold
+- [ ] Save → persist to database
+- [ ] Real-time sync when checkout tasks completed
+
+### 3.7 Cuartos (Rooms) Page
+- [ ] Create rooms list view (pulls from Cloudbeds via API or synced `rooms` table)
+- [ ] Display per room: number, type, guest name, check-in/out, status, open tasks/orders, deuda
+- [ ] Implement filters: by status (empty, occupied, cleaning), by floor
+- [ ] Room detail panel:
+  - [ ] Show reservation info from Cloudbeds (dates, rate, payment status)
+  - [ ] Show active pedidos (linked to room) — can reassign/reject from here
+  - [ ] Show active tareas (linked to room) — can reassign/mark done from here
+  - [ ] Show borrowed items (inventory currently in room with qty + date)
+  - [ ] Show financial summary (room service deudas)
+  - [ ] Display deuda per order: amount, date, status (pending, collected)
+  - [ ] "Collect Payment" button (mark order as paid) — Recepción only
+  - [ ] "Mark Room Ready for Checkout" button (Recepción only)
+  - [ ] Timeline of all events (reservation created, orders, tasks, checkout)
+- [ ] Real-time update from Cloudbeds sync
+- [ ] When checkout task marked done: auto-update inventory (restore borrowed items)
+
+### 3.1 Dashboard Page
+- [ ] Show all KPIs (update DASHBOARD.md Section 3.1 implementation details as you build)
+- [ ] Solicitudes Abiertas: total + breakdown by status + time-in-queue
+- [ ] Pedidos: total today, top 5 most/least ordered, avg delivery time, status breakdown
+- [ ] Tareas: total today, request types, completion rate %, avg completion time
+- [ ] Key metrics: agent conversations (today), escalations, booking success %, avg response time
+- [ ] Charts: Recharts via shadcn/ui Charts component (do NOT use direct Recharts imports)
+- [ ] Real-time updates via Supabase subscriptions
+- [ ] Role-based widget filtering:
+  - [ ] General staff: only see Tareas + Pedidos they're assigned to
+  - [ ] Recepción: all staff data + escalations
+  - [ ] Admin: all metrics + financial summaries
+
+---
+
+## Epic 8 — Dashboard Admin Pages
+
+### 4.1 Usuarios (Users)
+- [ ] Create users list view
+- [ ] Display: name, email, role, status, last login
+- [ ] "Create User" button → form: name, email, role (radio: Admin, Recepción, General)
+- [ ] "Edit User" button → pre-fill form, change name/email/role or disable account
+- [ ] "Delete User" button → soft delete (maintain audit trail)
+- [ ] "Reset Password" link → send password reset email via Resend
+- [ ] Verify RLS allows only admins to view/modify users
+
+### 4.2 Menu Management (Admin)
+- [ ] (Reuse 3.5 Menu Page, Admin-only access)
+- [ ] Add "Edit Item" form: change price, description, prep time, section
+- [ ] Add "Delete Item" button
+- [ ] Add "Set Kitchen Hours" (optional) — e.g., "Comida 12pm-3pm, 6pm-10pm"
+- [ ] Add seasonal availability dates (e.g., "Easter special: Mar 20 - Apr 15")
+
+### 4.3 Inventario Management (Admin)
+- [ ] (Reuse 3.6 Inventario Page, Admin-only access)
+- [ ] Add "Edit Item" form: change locations, reorder threshold
+- [ ] Add "Delete Item" button
+- [ ] Add "Adjust Stock" form (admin received shipment or broke item):
+  - [ ] Current qty
+  - [ ] Adjustment qty (+ or -)
+  - [ ] Reason
+  - [ ] Persist adjustment to inventory
+
+---
+
+## Epic 9 — Public Menu & Real-Time Features
+
+### Public Menu (No Auth)
+- [ ] Create `GET /menu/:hotelId` endpoint (or `GET /menu` if single hotel)
+- [ ] Fetch active menu items from database
+- [ ] Group by section (Desayuno, Comida/Cena, 24/7)
+- [ ] Show real-time availability (based on current time + item status)
+- [ ] Render: item name, description, price, prep time
+- [ ] Show "Available at 12:00" for sections not yet active
+- [ ] Dim unavailable sections (gray text)
+- [ ] NO ordering button on public page
+- [ ] Footer: "Continue with our Agent" → link back to chat
+- [ ] Ensure CORS allows any origin (guest can share via QR)
+
+### Real-Time Features
+- [ ] Implement Supabase Realtime subscriptions for:
+  - [ ] New pedidos (kitchen staff to see orders in real time)
+  - [ ] New tareas (housekeeping to see tasks in real time)
+  - [ ] Status changes (staff to see updates without refresh)
+  - [ ] Conversation messages (staff to see guest replies live)
+  - [ ] Inventory changes (deduction when delivered, restoration on return)
+- [ ] Add auto-refresh on page focus (user switches tabs → re-sync on return)
+
+### Agent Takeover State Sync
+- [ ] When staff clicks "Take Over": agent reads `conversations.current_takeover` and stops responding
+- [ ] At end of duration OR "Release" click: agent resumes responding
+- [ ] If takeover duration = null ("Always"): agent waits for manual release
+- [ ] Push notification to staff when takeover status changes
+
+---
+
+## Epic 10 — Integration & Testing
+
+### Code Tasks (Copilot)
+- [ ] Test all agent tools with pedidos and tareas creation
+- [ ] Verify agent respects menu availability (time-based rejection)
+- [ ] Verify agent suggests alternatives when item unavailable
+- [ ] Verify inventory auto-deduction when tarea created
+- [ ] Verify inventory auto-restoration when item returned
+- [ ] Verify checkout auto-creates return task with all borrowed items
+- [ ] Verify takeover duration enforcement
+- [ ] Verify role-based access (use Supabase RLS test client)
+- [ ] Verify staff can't access admin pages (RLS + frontend validation)
+- [ ] Test push notifications for all event types
+- [ ] Test public menu endpoint (no auth, real-time data)
+- [ ] Test mobile responsive UI on iPhone + Android
+- [ ] Test PWA installation after all features added
+
+### Manual Testing (You)
+- [ ] End-to-end booking flow: guest orders room→payment→confirmed→staff sees in dashboard
+- [ ] End-to-end room service: guest orders food→staff delivers→marked done→tracked metric
+- [ ] End-to-end housekeeping: guest requests towel→inventory deducted→staff delivers→inventory restored
+- [ ] Takeover & release flow: staff takes over→guest messages direct to staff→duration expires→agent resumes
+- [ ] Menu availability: test ordering outside time window (should be rejected)
+- [ ] Checkout flow: reservation ends→auto-task created→staff marks done→inventory restored
 
 ---
 

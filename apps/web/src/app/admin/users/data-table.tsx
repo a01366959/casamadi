@@ -49,6 +49,19 @@ import {
 } from '@/components/ui/empty';
 import { IconRefresh, IconUsers } from '@tabler/icons-react';
 import { ES } from '@/lib/spanish';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+interface DataTableProps<TData, TValue> {
+  columns: ColumnDef<TData, TValue>[];
+  data: TData[];
+}
 
 export function DataTable<TData, TValue>({
   columns,
@@ -83,14 +96,14 @@ export function DataTable<TData, TValue>({
 
   // Filtering logic
   React.useEffect(() => {
-    if (selectedRole) {
+    if (selectedRole && selectedRole !== '__all__') {
       table.getColumn('role')?.setFilterValue(selectedRole);
     } else {
       table.getColumn('role')?.setFilterValue(undefined);
     }
   }, [selectedRole]);
   React.useEffect(() => {
-    if (selectedPosition) {
+    if (selectedPosition && selectedPosition !== '__all__') {
       table.getColumn('position')?.setFilterValue(selectedPosition);
     } else {
       table.getColumn('position')?.setFilterValue(undefined);
@@ -107,27 +120,33 @@ export function DataTable<TData, TValue>({
           className="max-w-xs"
         />
         <div className="flex gap-2">
-          <select
-            value={selectedRole}
-            onChange={e => setSelectedRole(e.target.value)}
-            className="rounded border px-2 py-1 text-sm text-muted-foreground"
-            >
-              <option value="">{ES.users.allRoles || 'All roles'}</option>
-              {roles.map((role) => (
-                <option key={role} value={role}>{role}</option>
-              ))}
-            </select>
-            <select
-              value={selectedPosition}
-              onChange={e => setSelectedPosition(e.target.value)}
-              className="rounded border px-2 py-1 text-sm text-muted-foreground"
-            >
-              <option value="">{ES.users.allPositions || 'All positions'}</option>
-              {positions.map((pos) => (
-                <option key={pos} value={pos}>{pos}</option>
-              ))}
-            </select>
-          </div>
+          <Select value={selectedRole} onValueChange={setSelectedRole}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder={ES.users.allRoles || 'All roles'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="__all__">{ES.users.allRoles || 'All roles'}</SelectItem>
+                {roles.map((role) => (
+                  <SelectItem key={role} value={role}>{role}</SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Select value={selectedPosition} onValueChange={setSelectedPosition}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder={ES.users.allPositions || 'All positions'} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="__all__">{ES.users.allPositions || 'All positions'}</SelectItem>
+                {positions.map((pos) => (
+                  <SelectItem key={pos} value={pos}>{pos}</SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">

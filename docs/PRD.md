@@ -96,24 +96,67 @@ Guest asks about availability
 - Payment link valid: 30 minutes
 - Follow-up if not paid: 35 minutes after link sent
 
-### 4.4 Staff Dashboard
+### 4.4 Staff Dashboard (PWA)
 
-**Pages:**
-- `/` — Home with live stats and charts
-- `/conversations` — All guest conversations across channels
-- `/conversations/[id]` — Thread view with booking context panel
-- `/reservations` — Reservations board with payment status
-- `/orders` — Room service orders Kanban
-- `/tasks` — Housekeeping and maintenance tasks
-- `/escalations` — Escalation queue with claim system
-- `/sandbox` — Agent testing interface (admin only)
-- `/settings` — Hotel config and user management (admin only)
+**Two Sections:** Platform (all staff, role-gated) + Admin (admins only)
+
+**Platform Pages (All Staff):**
+- `/dashboard` — Home with live KPIs: open requests, top items, completion rates, avg times
+- `/conversaciones` — All guest conversations with takeover/manual control
+  - Status: active, escalated, takeover (with duration), closed
+  - Tags: Lead, Huésped, Evento (mutually exclusive, auto-assigned by agent)
+  - Staff can take over for 1h / 1d / 1w / 1m / Always
+  - View booking context + guest profile + full message history
+- `/pedidos` — Room service orders
+  - Status: pending, assigned, preparing, delivered, rejected
+  - Assign to staff, reject (if kitchen closed or item unavailable), mark delivered
+  - Auto-message guest when rejected with alternatives
+  - Track avg delivery time
+- `/tareas` — Housekeeping & concierge tasks
+  - Status: pending, assigned, completed, rejected
+  - Assign to staff, reject (if can't fulfill), mark done
+  - Auto-inventory deduction when delivered, restoration when returned
+  - Track completion rate & average time
+- `/menu` — View active menu items grouped by time window (Desayuno, Comida/Cena, 24/7)
+  - Staff can toggle items on/off (Recepción/Admin) — all items auto-reset Monday 00:00
+  - Real-time availability based on current time
+  - Admin can add new items
+- `/inventario` — Track physical items (towels, blankets, etc.)
+  - Show total, available, busy qty per item and room
+  - Staff can mark busy (delivered) or returned
+  - Auto-deduction when tarea created, restoration on checkout task completion
+  - Reorder alerts when below threshold
+  - Admin can add new items
+- `/cuartos` — Per-room view from Cloudbeds sync
+  - Guest info, reservation dates, status, payment status
+  - Open pedidos and tareas linked to room
+  - Borrowed items (inventory currently in room)
+  - Outstanding room service charges (deudas) — can collect individually or at checkout
+  - Timeline of all room events
+
+**Admin Pages:**
+- `/admin/usuarios` — CRUD users: create, edit role, delete (soft), reset password
+- `/admin/menu` — Full menu management: add items, edit, delete, set kitchen hours
+- `/admin/inventario` — Full inventory management: add items, edit, delete, adjust stock
+
+**Public (No Auth):**
+- `GET /menu/:hotelId` — Public menu view (real-time availability, no ordering)
 
 **PWA Requirements:**
 - Installable on iPhone (iOS 16.4+) and Android
-- Push notifications for escalations, orders, payments
+- Push notifications for new pedidos, tareas, escalations, inventory alerts
 - Works offline for viewing cached data
 - Lighthouse PWA score ≥ 90
+
+**Role-Based Access:**
+| Feature | Admin | Recepción | General |
+|---------|-------|-----------|---------|
+| View all pages | ✅ | ✅ | ✅ |
+| Create/modify pedidos, tareas, menu, inventario | ✅ | ✅ | ❌ |
+| Mark tasks/orders done | ✅ | ✅ | ✅ |
+| Manage users | ✅ | ❌ | ❌ |
+| Manage menu/inventory items | ✅ | ❌ | ❌ |
+| Access `/sandbox` | ✅ | ❌ | ❌ |
 
 ### 4.5 Sandbox Testing Interface
 
@@ -133,29 +176,53 @@ Admin-only page at `/sandbox`. Allows developers to test the full agent without 
 
 ## 5. Roles & Permissions
 
-| Role | Access |
-|---|---|
-| `admin` | Everything including `/sandbox` and `/settings` |
-| `manager` | Conversations, Reservations, Orders, Tasks, Escalations |
-| `front_desk` | Conversations, Reservations, Escalations |
-| `room_service` | Orders only |
-| `housekeeping` | Tasks only |
-
-### Escalation Routing
-
-| Type | Notified Roles | Fallback |
+| Role | Pages | Permissions |
 |---|---|---|
-| Complaint / upset guest | manager | All managers |
-| Room service issue | room_service + manager | All managers |
-| Maintenance request | housekeeping + manager | All managers |
-| Booking / modification | front_desk + manager | All managers |
-| AI low confidence | front_desk + manager | All managers |
-| Guest requests human | front_desk + manager | All managers |
-| Cloudbeds API failure | front_desk + manager | All managers |
+| `admin` | All platform + all admin + `/sandbox` | Full CRUD on all |
+| `recepción` | All platform except admin | Create/modify/reject pedidos & tareas, manage inventory busy/returned, toggle menu/inventory items |
+| `general` | All platform except admin | View only + mark tasks/orders done + inventory busy/returned |
+
+### Auto-Escalation Routing (Agent Decision)
+
+When agent detects high sentiment, out-of-scope request, or repeated issues:
+- Escalate conversation
+- Notify: All Recepción + Admin staff
+- Push notification: "Escalation: Guest [name] in room [X]"
+- Staff can view reason + take over manually
 
 ---
 
-## 6. Bilingual Rules
+## 6. Menu & Inventory Mechanics
+
+**Menu:**
+- Three time windows: Desayuno (e.g., 6am-11am), Comida/Cena (e.g., 11am-10pm), 24/7
+- Agent checks current time, only offers items in active window
+- Guest requests breakfast at 11:30am → "Breakfast ended at 11am, try lunch or 24/7 options"
+- Item can be toggled off by Recepción/Admin — agent rejects, suggests alternatives
+- **Every Monday 00:00:** All items auto-reactivate
+- Items can be marked unavailable (e.g., "out of pizza dough") — restoration is manual or on Monday reset
+- **Public menu link** (`/menu/:hotelId`) shows real-time availability, no ordering
+
+**Inventory:**
+- Items: extra towels, blankets, pillows, etc. (staff-managed consumables)
+- When agent detects guest request: create tarea → auto-subtract from available qty, mark as busy
+- When staff delivers: mark qty as busy + room # + timestamp
+- When checkout detected: auto-create tarea "Return borrowed items from room 301"
+- When return task marked done: qty restored to available
+- **Reorder threshold:** If available < threshold → Admin gets alert
+
+---
+
+## 7. Financial Tracking (Deudas)
+
+- Pedidos create charges that appear in room's outstanding balance
+- Collected individually (per order) or at checkout (per stay)
+- Staff can mark as "collected" in cuartos view
+- Cloudbeds tracks final settlement at checkout
+
+---
+
+## 8. Bilingual Rules
 
 1. First reply always in Spanish regardless of guest's language
 2. First reply naturally mentions English is available
@@ -165,7 +232,7 @@ Admin-only page at `/sandbox`. Allows developers to test the full agent without 
 
 ---
 
-## 7. Non-Functional Requirements
+## 9. Non-Functional Requirements
 
 | Requirement | Target |
 |---|---|
@@ -176,18 +243,20 @@ Admin-only page at `/sandbox`. Allows developers to test the full agent without 
 | Dashboard load on mobile 4G | < 2.5s |
 | Agent uptime | 99.5% monthly |
 | Lighthouse PWA score | ≥ 90 |
+| Lighthouse Performance | ≥ 80 (mobile) |
 | TypeScript errors | Zero (strict mode) |
 
 ---
 
-## 8. Out of Scope (v1)
+## 10. Out of Scope (v1)
 
 - Dark mode
 - Native iOS / Android apps
 - Payment processing beyond Cloudbeds Payments
 - SMS channel
 - Reservation modification or cancellation by agent
-- Guest-facing web portal
-- Analytics / reporting beyond dashboard home charts
+- Guest-facing web portal (other than public menu + chat)
+- Analytics / reporting beyond dashboard home KPIs
 - Multi-language dashboard UI (Spanish only)
 - Any PMS other than Cloudbeds
+- Conversation deletion (keep 7+ years for audit trail)
