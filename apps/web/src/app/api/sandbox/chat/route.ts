@@ -2,17 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, sessionId, phone } = await request.json();
+    const { hotel_id, phone, message } = await request.json();
 
-    if (!message) {
+    if (!message || !hotel_id || !phone) {
       return NextResponse.json(
-        { success: false, error: 'Missing required field: message' },
+        { success: false, error: 'Missing required fields: hotel_id, phone, message' },
         { status: 400 }
       );
     }
-
-    // Generate phone from sessionId if not provided
-    const finalPhone = phone || `+1${Math.floor(Math.random() * 9000000000) + 1000000000}`;
 
     // Call the agent backend
     const agentUrl = process.env.NEXT_PUBLIC_AGENT_URL || 'http://localhost:5001';
@@ -23,8 +20,8 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        hotel_id: 'bernal',
-        phone: finalPhone,
+        hotel_id,
+        phone,
         message,
         channel: 'sandbox',
       }),
@@ -42,7 +39,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       reply: data.reply || 'No response',
-      language: data.language,
+      language: data.language || 'es',
       toolCalls: data.toolCalls || [],
     });
   } catch (error) {
