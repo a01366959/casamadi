@@ -3,7 +3,6 @@
 import { useAuth } from '@/lib/supabase/auth-provider';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
-import TextareaAutosize from 'react-textarea-autosize';
 import { AppSidebar } from '@/components/app-sidebar';
 import {
   Breadcrumb,
@@ -20,53 +19,44 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-} from '@/components/ui/input-group';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 import {
   IconSend,
-  IconPlus,
-  IconX,
+  IconSettings,
   IconBug,
-  IconCreditCard,
   IconCopy,
   IconCheck,
   IconClock,
   IconThumbUp,
   IconThumbDown,
-  IconRefresh,
   IconMessage,
+  IconX,
+  IconDownload,
 } from '@tabler/icons-react';
-import { ES } from '@/lib/spanish';
 
 interface Message {
   id: string;
@@ -76,6 +66,8 @@ interface Message {
   responseTime?: number;
   toolCalls?: any[];
   reaction?: 'positive' | 'negative' | null;
+  requestPayload?: any;
+  responsePayload?: any;
 }
 
 interface SandboxSession {
@@ -94,10 +86,15 @@ export default function SandboxPage() {
   const [activeSessionId, setActiveSessionId] = useState<string>('');
   const [messageInput, setMessageInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [debugOpen, setDebugOpen] = useState(true);
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [requestStartTime, setRequestStartTime] = useState<number | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Settings state
+  const [hotelId, setHotelId] = useState('bernal');
+  const [agentUrl, setAgentUrl] = useState('');
 
   // Check auth access
   useEffect(() => {
@@ -125,16 +122,9 @@ export default function SandboxPage() {
     const phone = `+1${Math.floor(Math.random() * 9000000000) + 1000000000}`;
     const newSession: SandboxSession = {
       id,
-      name: `Test ${sessions.length + 1}`,
+      name: `Chat ${sessions.length + 1}`,
       phone,
-      messages: [
-        {
-          id: 'init-1',
-          role: 'system',
-          content: `Sandbox session started (Phone: ${phone}). Testing agent in Spanish.`,
-          timestamp: new Date(),
-        },
-      ],
+      messages: [],
       createdAt: new Date(),
     };
     setSessions([...sessions, newSession]);
@@ -155,50 +145,54 @@ export default function SandboxPage() {
     const activeSession = sessions.find((s) => s.id === activeSessionId);
     if (!activeSession) return;
 
+    const userMessageText = messageInput;
+
     // Add user message
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
       role: 'user',
-      content: messageInput,
+      content: userMessageText,
       timestamp: new Date(),
-      reaction: null,
     };
 
-    const updatedSessions = sessions.map((s) =>
-      s.id === activeSessionId
-        ? { ...s, messages: [...s.messages, userMessage] }
-        : s
+    setSessions((prevSessions) =>
+      prevSessions.map((s) =>
+        s.id === activeSessionId
+          ? { ...s, messages: [...s.messages, userMessage] }
+          : s
+      )
     );
-    setSessions(updatedSessions);
+
     setMessageInput('');
     setLoading(true);
     setRequestStartTime(Date.now());
 
     try {
-      // Call agent via /api/sandbox/chat
+      const requestPayload = {
+        hotel_id: hotelId,
+        phone: activeSession.phone,
+        message: userMessageText,
+      };
+
       const response = await fetch('/api/sandbox/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hotel_id: 'bernal',
-          phone: activeSession?.phone || '+15551234567',
-          message: messageInput,
-        }),
+        body: JSON.stringify(requestPayload),
       });
 
       const responseTime = Date.now() - (requestStartTime || Date.now());
       const data = await response.json();
 
       if (data.success) {
-        // Add assistant response
         const assistantMessage: Message = {
           id: `msg-${Date.now()}-ai`,
           role: 'assistant',
-          content: data.reply,
+          content: data.reply || 'No response',
           timestamp: new Date(),
           responseTime,
-          toolCalls: data.toolCalls,
-          reaction: null,
+          toolCalls: data.toolCalls || [],
+          requestPayload,
+          responsePayload: data,
         };
 
         setSessions((prevSessions) =>
@@ -209,13 +203,13 @@ export default function SandboxPage() {
           )
         );
       } else {
-        // Add error message
         const errorMessage: Message = {
           id: `msg-${Date.now()}-err`,
           role: 'system',
-          content: `Error: ${data.error || 'Failed to get response'}`,
+          content: `❌ Error: ${data.error || 'Agent error'}`,
           timestamp: new Date(),
-          reaction: null,
+          requestPayload,
+          responsePayload: data,
         };
 
         setSessions((prevSessions) =>
@@ -230,9 +224,8 @@ export default function SandboxPage() {
       const errorMessage: Message = {
         id: `msg-${Date.now()}-err`,
         role: 'system',
-        content: `Network error: ${error instanceof Error ? error.message : String(error)}`,
+        content: `❌ Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         timestamp: new Date(),
-        reaction: null,
       };
 
       setSessions((prevSessions) =>
@@ -244,7 +237,6 @@ export default function SandboxPage() {
       );
     } finally {
       setLoading(false);
-      setRequestStartTime(null);
     }
   };
 
@@ -265,55 +257,64 @@ export default function SandboxPage() {
     );
   };
 
-  const copyMessageContent = (content: string, messageId: string) => {
-    navigator.clipboard.writeText(content);
+  const copyToClipboard = (text: string, messageId: string) => {
+    navigator.clipboard.writeText(text);
     setCopiedMessageId(messageId);
     setTimeout(() => setCopiedMessageId(null), 2000);
   };
 
-  const simulatePayment = async () => {
-    if (!activeSessionId) return;
+  const exportConversation = () => {
+    const activeSession = sessions.find((s) => s.id === activeSessionId);
+    if (!activeSession) return;
+
+    const data = {
+      session: activeSession,
+      exportedAt: new Date().toISOString(),
+    };
+
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sandbox-${activeSession.id}.json`;
+    a.click();
+  };
+
+  const simulatePayment = async (status: 'completed' | 'failed') => {
+    const activeSession = sessions.find((s) => s.id === activeSessionId);
+    if (!activeSession) return;
 
     try {
       const response = await fetch('/api/sandbox/simulate-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: activeSessionId }),
+        body: JSON.stringify({
+          hotel_id: hotelId,
+          reservation_id: `test-res-${Date.now()}`,
+          status,
+          amount: Math.random() * 5000,
+        }),
       });
 
-      const data = await response.json();
+      if (response.ok) {
+        const paymentMessage: Message = {
+          id: `msg-${Date.now()}-payment`,
+          role: 'system',
+          content: `💳 Payment ${status === 'completed' ? '✅ Completed' : '❌ Failed'}`,
+          timestamp: new Date(),
+        };
 
-      const systemMessage: Message = {
-        id: `msg-${Date.now()}-payment`,
-        role: 'system',
-        content: data.message || 'Payment simulated',
-        timestamp: new Date(),
-        reaction: null,
-      };
-
-      setSessions((prevSessions) =>
-        prevSessions.map((s) =>
-          s.id === activeSessionId
-            ? { ...s, messages: [...s.messages, systemMessage] }
-            : s
-        )
-      );
+        setSessions((prevSessions) =>
+          prevSessions.map((s) =>
+            s.id === activeSessionId
+              ? { ...s, messages: [...s.messages, paymentMessage] }
+              : s
+          )
+        );
+      }
     } catch (error) {
-      const errorMessage: Message = {
-        id: `msg-${Date.now()}-err`,
-        role: 'system',
-        content: `Payment simulation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        timestamp: new Date(),
-        reaction: null,
-      };
-
-      setSessions((prevSessions) =>
-        prevSessions.map((s) =>
-          s.id === activeSessionId
-            ? { ...s, messages: [...s.messages, errorMessage] }
-            : s
-        )
-      );
+      console.error('Payment simulation failed:', error);
     }
   };
 
@@ -322,31 +323,15 @@ export default function SandboxPage() {
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>
-          <header className="sticky top-0 flex shrink-0 items-center gap-2 border-b bg-background p-4">
+          <header className="sticky top-0 flex h-16 shrink-0 items-center gap-2 border-b bg-background px-4">
             <SidebarTrigger className="-ml-1" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
-            />
+            <Separator orientation="vertical" className="h-4" />
             <Skeleton className="h-8 w-48" />
           </header>
-          <div className="flex flex-1 gap-4 overflow-hidden p-4">
-            {/* Tabs skeleton */}
-            <div className="flex flex-1 flex-col gap-4">
-              <div className="flex gap-2">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-10 w-24" />
-                ))}
-              </div>
-              <Skeleton className="flex-1 rounded-lg" />
-            </div>
-          </div>
         </SidebarInset>
       </SidebarProvider>
     );
   }
-
-  const userRole = (user?.user_metadata as any)?.role;
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
@@ -354,449 +339,377 @@ export default function SandboxPage() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="sticky top-0 flex shrink-0 items-center gap-2 border-b bg-background p-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator
-            orientation="vertical"
-            className="mr-2 data-[orientation=vertical]:h-4"
-          />
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink href="/sandbox">
-                  {ES.nav.sandbox}
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator className="hidden md:block" />
-              <BreadcrumbItem>
-                <BreadcrumbPage>
-                  {activeSession?.name || 'Sandbox'}
-                </BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-        </header>
-
-        <div className="flex flex-1 overflow-hidden">
-          {/* Chat Area */}
-          <div className="flex-1 flex flex-col">
-            <Tabs value={activeSessionId} onValueChange={setActiveSessionId} className="flex-1 flex flex-col">
-              {/* Tabs Header */}
-              <div className="flex items-center justify-between border-b px-4 pt-4">
-                <TabsList className="w-auto">
-                  {sessions.map((session) => (
-                    <div key={session.id} className="relative">
-                      <TabsTrigger value={session.id} className="pr-8">
-                        {session.name}
-                      </TabsTrigger>
-                      {sessions.length > 1 && (
-                        <button
-                          onClick={() => deleteSession(session.id)}
-                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded transition-colors"
-                        >
-                          <IconX className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </TabsList>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={createNewSession}
-                  className="ml-2"
-                >
-                  <IconPlus className="h-4 w-4 mr-2" />
-                  New
-                </Button>
-              </div>
-
-              {/* Chat Content */}
-              {sessions.map((session) => (
-                <TabsContent
-                  key={session.id}
-                  value={session.id}
-                  className="flex-1 flex flex-col overflow-hidden"
-                >
-                  {/* Messages Area */}
-                  {session.messages.length === 0 ? (
-                    <Empty className="flex-1 flex items-center justify-center">
-                      <EmptyHeader>
-                        <EmptyMedia variant="icon">
-                          <IconMessage className="h-12 w-12" />
-                        </EmptyMedia>
-                        <EmptyTitle>Start a Conversation</EmptyTitle>
-                        <EmptyDescription className="max-w-xs text-pretty">
-                          Begin testing the agent by sending your first message. Type in Spanish or English.
-                        </EmptyDescription>
-                      </EmptyHeader>
-                      <EmptyContent>
-                        <p className="text-xs text-muted-foreground">
-                          💡 Try: "Quiero hacer una reserva"
-                        </p>
-                      </EmptyContent>
-                    </Empty>
-                  ) : (
-                    <ScrollArea
-                      ref={scrollRef}
-                      className="flex-1 overflow-hidden"
-                    >
-                      <div className="px-4 py-4 space-y-4 max-w-4xl">
-                        {session.messages.map((msg) => (
-                          <ContextMenu key={msg.id}>
-                            <ContextMenuTrigger asChild>
-                              <div
-                                className={`flex ${
-                                  msg.role === 'user'
-                                    ? 'justify-end'
-                                    : 'justify-start'
-                                }`}
-                              >
-                                <div
-                                  className={`group max-w-xl lg:max-w-2xl px-4 py-3 rounded-lg ${
-                                    msg.role === 'user'
-                                      ? 'bg-primary text-primary-foreground rounded-br-none'
-                                      : msg.role === 'system'
-                                      ? 'bg-muted text-muted-foreground rounded-bl-none'
-                                      : 'bg-secondary text-secondary-foreground rounded-bl-none'
-                                  }`}
-                                >
-                                  {/* Message Content */}
-                                  <p className="text-sm leading-relaxed">
-                                    {msg.content}
-                                  </p>
-
-                                  {/* Tool Calls Info */}
-                                  {msg.toolCalls && msg.toolCalls.length > 0 && (
-                                    <div className="mt-3 pt-2 border-t border-current border-opacity-20">
-                                      <p className="text-xs font-semibold opacity-75 mb-1">
-                                        Tools Used:
-                                      </p>
-                                      <div className="flex flex-wrap gap-1">
-                                        {msg.toolCalls.map(
-                                          (call: any, i: number) => (
-                                            <Badge
-                                              key={i}
-                                              variant="secondary"
-                                              className="text-xs"
-                                            >
-                                              {call.name}
-                                            </Badge>
-                                          )
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Message Metadata */}
-                                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-current border-opacity-20 opacity-70">
-                                    <span className="text-xs">
-                                      {msg.timestamp.toLocaleTimeString(
-                                        'es-MX',
-                                        {
-                                          hour: '2-digit',
-                                          minute: '2-digit',
-                                        }
-                                      )}
-                                    </span>
-                                    {msg.responseTime && (
-                                      <>
-                                        <span className="text-opacity-50">•</span>
-                                        <span className="text-xs flex items-center gap-1">
-                                          <IconClock className="h-3 w-3" />
-                                          {msg.responseTime}ms
-                                        </span>
-                                      </>
-                                    )}
-                                  </div>
-
-                                  {/* Reactions for Assistant Messages */}
-                                  {msg.role === 'assistant' && (
-                                    <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                      <button
-                                        onClick={() =>
-                                          addReaction(msg.id, 'positive')
-                                        }
-                                        className={`p-1.5 rounded hover:bg-black/10 transition-colors ${
-                                          msg.reaction === 'positive'
-                                            ? 'bg-black/10'
-                                            : ''
-                                        }`}
-                                        title="Good response"
-                                      >
-                                        <IconThumbUp
-                                          className={`h-4 w-4 ${
-                                            msg.reaction === 'positive'
-                                              ? 'fill-current'
-                                              : ''
-                                          }`}
-                                        />
-                                      </button>
-                                      <button
-                                        onClick={() =>
-                                          addReaction(msg.id, 'negative')
-                                        }
-                                        className={`p-1.5 rounded hover:bg-black/10 transition-colors ${
-                                          msg.reaction === 'negative'
-                                            ? 'bg-black/10'
-                                            : ''
-                                        }`}
-                                        title="Bad response"
-                                      >
-                                        <IconThumbDown
-                                          className={`h-4 w-4 ${
-                                            msg.reaction === 'negative'
-                                              ? 'fill-current'
-                                              : ''
-                                          }`}
-                                        />
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </ContextMenuTrigger>
-
-                            {/* Context Menu */}
-                            <ContextMenuContent className="w-48">
-                              <ContextMenuItem
-                                onClick={() =>
-                                  copyMessageContent(msg.content, msg.id)
-                                }
-                              >
-                                {copiedMessageId === msg.id ? (
-                                  <>
-                                    <IconCheck className="h-4 w-4 mr-2" />
-                                    Copied
-                                  </>
-                                ) : (
-                                  <>
-                                    <IconCopy className="h-4 w-4 mr-2" />
-                                    Copy
-                                  </>
-                                )}
-                              </ContextMenuItem>
-                              <ContextMenuSeparator />
-                              <ContextMenuItem disabled>
-                                <span className="text-xs text-muted-foreground">
-                                  ID: {msg.id.substring(0, 12)}...
-                                </span>
-                              </ContextMenuItem>
-                              {msg.responseTime && (
-                                <ContextMenuItem disabled>
-                                  <span className="text-xs text-muted-foreground">
-                                    Response: {msg.responseTime}ms
-                                  </span>
-                                </ContextMenuItem>
-                              )}
-                              <ContextMenuSeparator />
-                              <ContextMenuItem
-                                variant="destructive"
-                                onClick={() => {
-                                  setSessions((prev) =>
-                                    prev.map((s) =>
-                                      s.id === activeSessionId
-                                        ? {
-                                            ...s,
-                                            messages: s.messages.filter(
-                                              (m) => m.id !== msg.id
-                                            ),
-                                          }
-                                        : s
-                                    )
-                                  );
-                                }}
-                              >
-                                Delete
-                              </ContextMenuItem>
-                            </ContextMenuContent>
-                          </ContextMenu>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  )}
-
-                  {/* Input Area */}
-                  <div className="border-t bg-background p-4 space-y-2">
-                    {/* Action Buttons */}
-                    <ButtonGroup>
-                      <Button
-                        onClick={simulatePayment}
-                        variant="outline"
-                        size="sm"
-                        title="Simulate payment webhook"
-                        disabled={loading}
-                      >
-                        <IconCreditCard className="h-4 w-4 mr-2" />
-                        Simulate Payment
-                      </Button>
-                      <Button
-                        onClick={() => setDebugOpen(!debugOpen)}
-                        variant="outline"
-                        size="sm"
-                        title="Toggle debug panel"
-                      >
-                        <IconBug className="h-4 w-4 mr-2" />
-                        Debug
-                      </Button>
-                    </ButtonGroup>
-
-                    {/* Message Input */}
-                    <InputGroup>
-                      <TextareaAutosize
-                        data-slot="input-group-control"
-                        className="flex field-sizing-content min-h-12 max-h-32 w-full resize-none rounded-md bg-transparent px-3 py-2.5 text-sm transition-[color,box-shadow] outline-none placeholder:text-muted-foreground"
-                        placeholder="Escribe un mensaje... (Shift+Enter para nueva línea)"
-                        value={messageInput}
-                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessageInput(e.target.value)}
-                        onKeyPress={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-                          if (
-                            e.key === 'Enter' &&
-                            !e.shiftKey &&
-                            !loading
-                          ) {
-                            e.preventDefault();
-                            sendMessage();
-                          }
-                        }}
-                        disabled={loading}
-                      />
-                      <InputGroupAddon align="block-end">
-                        <InputGroupButton
-                          className="ml-auto"
-                          size="sm"
-                          variant="default"
-                          onClick={sendMessage}
-                          disabled={
-                            loading ||
-                            !messageInput.trim()
-                          }
-                        >
-                          {loading ? (
-                            <div className="h-4 w-4 border border-white/30 border-t-white rounded-full animate-spin" />
-                          ) : (
-                            <IconSend className="h-4 w-4" />
-                          )}
-                        </InputGroupButton>
-                      </InputGroupAddon>
-                    </InputGroup>
-                  </div>
-                </TabsContent>
-              ))}
-            </Tabs>
+        {/* Header */}
+        <header className="sticky top-0 flex h-16 shrink-0 items-center justify-between border-b bg-background px-4">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="h-4" />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/sandbox">Sandbox</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{activeSession?.name}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
           </div>
 
-          {/* Debug Sidebar */}
-          {debugOpen && (
-            <Card className="w-80 flex flex-col border-l rounded-none">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 border-b">
-                <div className="flex items-center gap-2">
-                  <IconBug className="h-4 w-4" />
-                  <CardTitle className="text-sm">Debug Panel</CardTitle>
-                  <Badge variant="outline" className="text-xs">
-                    SANDBOX
-                  </Badge>
-                </div>
-                <button
-                  onClick={() => setDebugOpen(false)}
-                  className="p-1 hover:bg-muted rounded transition-colors"
-                >
-                  <IconX className="h-4 w-4" />
-                </button>
-              </CardHeader>
+          {/* Header Actions */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setDebugOpen(!debugOpen)}
+              title="Debug panel"
+              className="hover:bg-muted"
+            >
+              <IconBug className="h-4 w-4" />
+            </Button>
 
-              <CardContent className="flex-1 flex flex-col space-y-4 overflow-hidden pt-4">
-                {/* Session Info */}
-                <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-muted-foreground">
-                    Session
-                  </h3>
-                  <div className="space-y-1 text-xs">
-                    <p className="break-all font-mono text-muted-foreground">
-                      {activeSessionId.substring(0, 20)}...
+            <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" title="Settings" className="hover:bg-muted">
+                  <IconSettings className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-96">
+                <SheetHeader>
+                  <SheetTitle>Sandbox Settings</SheetTitle>
+                  <SheetDescription>Configure agent and test parameters</SheetDescription>
+                </SheetHeader>
+                <div className="space-y-6 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="hotel" className="text-sm font-medium">Hotel ID</Label>
+                    <Input
+                      id="hotel"
+                      value={hotelId}
+                      onChange={(e) => setHotelId(e.target.value)}
+                      placeholder="bernal"
+                      className="h-9"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="agent-url" className="text-sm font-medium">Agent URL</Label>
+                    <Input
+                      id="agent-url"
+                      value={agentUrl}
+                      onChange={(e) => setAgentUrl(e.target.value)}
+                      placeholder="http://localhost:5001"
+                      className="h-9"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Leave empty to use default or environment variable
                     </p>
-                    <p className="text-muted-foreground">
-                      Messages: {activeSession?.messages.length || 0}
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Payment Simulation</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => simulatePayment('completed')}
+                        className="flex-1"
+                      >
+                        ✅ Success
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => simulatePayment('failed')}
+                        className="flex-1"
+                      >
+                        ❌ Failed
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={exportConversation}
+                    className="w-full"
+                  >
+                    <IconDownload className="h-4 w-4 mr-2" />
+                    Export Conversation
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <div className="flex flex-1 overflow-hidden gap-4 p-4">
+          {/* Chat Area */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Session Tabs */}
+            <div className="flex gap-2 pb-4 border-b overflow-x-auto">
+              {sessions.map((session) => (
+                <div key={session.id} className="relative group">
+                  <Button
+                    variant={activeSessionId === session.id ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setActiveSessionId(session.id)}
+                    className="pr-8 whitespace-nowrap"
+                  >
+                    {session.name}
+                  </Button>
+                  {sessions.length > 1 && (
+                    <button
+                      onClick={() => deleteSession(session.id)}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 p-1 opacity-0 group-hover:opacity-100 hover:bg-muted rounded transition-all"
+                    >
+                      <IconX className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={createNewSession}
+                className="whitespace-nowrap"
+              >
+                + New
+              </Button>
+            </div>
+
+            {/* Messages Area */}
+            {activeSession?.messages.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center space-y-3">
+                  <IconMessage className="h-12 w-12 mx-auto text-muted-foreground opacity-50" />
+                  <div>
+                    <h3 className="font-semibold text-foreground">Start a Conversation</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Send your first message to begin testing
                     </p>
-                    <Badge variant="secondary" className="text-xs">
-                      Channel: sandbox
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-center pt-2">
+                    <Badge variant="secondary" className="cursor-pointer hover:bg-secondary/80" onClick={() => setMessageInput('¿Quiero hacer una reserva?')}>
+                      💡 "¿Quiero hacer una reserva?"
                     </Badge>
                   </div>
                 </div>
+              </div>
+            ) : (
+              <ScrollArea ref={scrollRef} className="flex-1 pr-4">
+                <div className="space-y-4 py-4">
+                  {activeSession?.messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${
+                        msg.role === 'user' ? 'justify-end' : 'justify-start'
+                      } transition-all`}
+                    >
+                      <div
+                        className={`group max-w-md lg:max-w-lg px-4 py-2.5 rounded-lg shadow-sm ${
+                          msg.role === 'user'
+                            ? 'bg-blue-600 text-white rounded-br-none'
+                            : msg.role === 'system'
+                            ? 'bg-amber-50 text-amber-900 rounded-bl-none border border-amber-200'
+                            : 'bg-gray-100 text-gray-900 rounded-bl-none'
+                        }`}
+                      >
+                        <p className="text-sm leading-relaxed break-words">
+                          {msg.content}
+                        </p>
 
-                <Separator />
+                        {/* Tool Calls */}
+                        {msg.toolCalls && msg.toolCalls.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-current border-opacity-20">
+                            <p className="text-xs font-semibold opacity-75 mb-1">Tools:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {msg.toolCalls.map((call: any, i: number) => (
+                                <Badge key={i} variant="secondary" className="text-xs">
+                                  {call.name}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
-                {/* Stats */}
-                {activeSession && activeSession.messages.length > 0 && (
-                  <>
-                    <div className="space-y-2">
-                      <h3 className="text-xs font-semibold text-muted-foreground">
-                        Stats
-                      </h3>
-                      <div className="space-y-1 text-xs text-muted-foreground">
-                        <p>
-                          User Messages:{' '}
-                          {
-                            activeSession.messages.filter(
-                              (m) => m.role === 'user'
-                            ).length
-                          }
-                        </p>
-                        <p>
-                          Assistant Messages:{' '}
-                          {
-                            activeSession.messages.filter(
-                              (m) => m.role === 'assistant'
-                            ).length
-                          }
-                        </p>
-                        <p>
-                          Avg Response:{' '}
-                          {(
-                            activeSession.messages
-                              .filter((m) => m.responseTime)
-                              .reduce(
-                                (sum, m) => sum + (m.responseTime || 0),
-                                0
-                              ) /
-                            activeSession.messages.filter(
-                              (m) => m.responseTime
-                            ).length
-                          ).toFixed(0)}
-                          ms
-                        </p>
+                        {/* Metadata */}
+                        <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-current border-opacity-20 opacity-70 text-xs">
+                          <span>
+                            {msg.timestamp.toLocaleTimeString('es-MX', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          {msg.responseTime && (
+                            <>
+                              <span>•</span>
+                              <span className="flex items-center gap-0.5">
+                                <IconClock className="h-3 w-3" />
+                                {msg.responseTime}ms
+                              </span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Assistant Actions */}
+                        {msg.role === 'assistant' && (
+                          <div className="flex gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => addReaction(msg.id, 'positive')}
+                              className={`p-1.5 rounded hover:bg-black/10 transition-colors ${
+                                msg.reaction === 'positive' ? 'bg-black/10' : ''
+                              }`}
+                              title="Good response"
+                            >
+                              <IconThumbUp
+                                className={`h-3.5 w-3.5 ${
+                                  msg.reaction === 'positive' ? 'fill-current' : ''
+                                }`}
+                              />
+                            </button>
+                            <button
+                              onClick={() => addReaction(msg.id, 'negative')}
+                              className={`p-1.5 rounded hover:bg-black/10 transition-colors ${
+                                msg.reaction === 'negative' ? 'bg-black/10' : ''
+                              }`}
+                              title="Bad response"
+                            >
+                              <IconThumbDown
+                                className={`h-3.5 w-3.5 ${
+                                  msg.reaction === 'negative' ? 'fill-current' : ''
+                                }`}
+                              />
+                            </button>
+                            <button
+                              onClick={() => copyToClipboard(msg.content, msg.id)}
+                              className="p-1.5 rounded hover:bg-black/10 transition-colors"
+                              title="Copy"
+                            >
+                              {copiedMessageId === msg.id ? (
+                                <IconCheck className="h-3.5 w-3.5" />
+                              ) : (
+                                <IconCopy className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    <Separator />
-                  </>
-                )}
-
-                {/* Quick Commands */}
-                <div className="space-y-2 flex-1 overflow-auto">
-                  <h3 className="text-xs font-semibold text-muted-foreground">
-                    Quick Test
-                  </h3>
-                  <div className="space-y-1 text-xs">
-                    <p className="text-muted-foreground">
-                      📅 "Quiero reservar 2 noches"
-                    </p>
-                    <p className="text-muted-foreground">
-                      🔗 "Necesito una habitación doble"
-                    </p>
-                    <p className="text-muted-foreground">
-                      💳 "Confirmar reservación"
-                    </p>
-                    <p className="text-muted-foreground">
-                      📞 "Necesito más toallas"
-                    </p>
-                    <p className="text-muted-foreground">
-                      ❌ "Cancelar reservación"
-                    </p>
-                  </div>
+                  ))}
+                  {loading && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-100 text-gray-900 rounded-lg rounded-bl-none px-4 py-3">
+                        <div className="flex gap-1.5">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
+              </ScrollArea>
+            )}
+
+            {/* Input Area */}
+            <div className="border-t pt-4 mt-auto">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Escribe tu mensaje..."
+                  value={messageInput}
+                  onChange={(e) => setMessageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  disabled={loading}
+                  className="h-10"
+                />
+                <Button
+                  onClick={sendMessage}
+                  disabled={loading || !messageInput.trim()}
+                  size="icon"
+                  className="h-10 w-10"
+                >
+                  {loading ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <IconSend className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                💡 Shift + Enter for new line
+              </p>
+            </div>
+          </div>
+
+          {/* Debug Panel */}
+          {debugOpen && (
+            <div className="w-96 border-l overflow-hidden">
+              <Tabs defaultValue="request" className="h-full flex flex-col">
+                <TabsList className="grid w-full grid-cols-2 rounded-none">
+                  <TabsTrigger value="request" className="rounded-none">Request</TabsTrigger>
+                  <TabsTrigger value="response" className="rounded-none">Response</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="request" className="flex-1 overflow-hidden">
+                  <Card className="h-full border-0 rounded-none">
+                    <CardHeader className="pb-2 border-b">
+                      <CardTitle className="text-xs">Latest Request</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <ScrollArea className="h-full">
+                        <pre className="text-xs bg-muted p-3 whitespace-pre-wrap break-words font-mono">
+                          {activeSession?.messages[activeSession.messages.length - 1]
+                            ?.requestPayload
+                            ? JSON.stringify(
+                                activeSession.messages[
+                                  activeSession.messages.length - 1
+                                ]?.requestPayload,
+                                null,
+                                2
+                              )
+                            : 'No request yet'}
+                        </pre>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="response" className="flex-1 overflow-hidden">
+                  <Card className="h-full border-0 rounded-none">
+                    <CardHeader className="pb-2 border-b">
+                      <CardTitle className="text-xs">Latest Response</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <ScrollArea className="h-full">
+                        <pre className="text-xs bg-muted p-3 whitespace-pre-wrap break-words font-mono">
+                          {activeSession?.messages[activeSession.messages.length - 1]
+                            ?.responsePayload
+                            ? JSON.stringify(
+                                activeSession.messages[
+                                  activeSession.messages.length - 1
+                                ]?.responsePayload,
+                                null,
+                                2
+                              )
+                            : 'No response yet'}
+                        </pre>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            </div>
           )}
         </div>
       </SidebarInset>
