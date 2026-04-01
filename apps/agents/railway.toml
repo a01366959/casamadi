@@ -1,9 +1,17 @@
-[build]
-builder = "nixpacks"
-buildCommand = "pnpm build"
+# Railway config for @casamadi/agents
+# Service root: apps/agents
+# This service is part of a monorepo - need to build from repo root
 
-[deploy]
-startCommand = "pnpm start"
-healthcheckPath = "/health"
-healthcheckTimeout = 10
-restartPolicyMaxRetries = 5
+[nixpacks]
+providers = ["node"]
+
+[[nixpacks.pkgs]]
+pkgName = "pnpm"
+
+[build]
+# Go to monorepo root, install, and build
+buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @casamadi/agents build"
+
+[start]
+# Run the compiled agent
+runCommand = "node dist/index.js"

@@ -1,0 +1,23 @@
+# Use Node 20 slim image
+FROM node:20-slim
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Set working directory
+WORKDIR /app
+
+# Copy entire monorepo (Railway copies from repo root to /app)
+COPY . .
+
+# Install dependencies from root
+RUN pnpm install --frozen-lockfile
+
+# Build the agent package
+RUN pnpm --filter @casamadi/agents build
+
+# Expose port (will be overridden by Railway PORT env var)
+EXPOSE 5001
+
+# Start the agent
+CMD ["pnpm", "--filter", "@casamadi/agents", "start"]

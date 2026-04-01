@@ -32,9 +32,10 @@ jobs:
 
       - name: Deploy to Railway (${{ steps.env.outputs.env_name }})
         run: |
-          curl -fsSL https://railway.app/install.sh | sh
+          npm i -g @railway/cli
           railway link ${{ secrets.RAILWAY_PROJECT_ID }}
           railway service ${{ steps.env.outputs.service }}
           railway up --service ${{ steps.env.outputs.service }}
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_WORKDIR: apps/agents
