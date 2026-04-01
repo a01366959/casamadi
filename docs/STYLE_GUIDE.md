@@ -58,6 +58,28 @@ import { IconThumbUp, IconBuilding, IconStar } from '@tabler/icons-react'
 - Use consistent sizing: `className="h-4 w-4"` for inline, `className="h-5 w-5"` for larger contexts
 - Always pair icons with text (unless `aria-label` is present)
 
+### **CRITICAL: Override shadcn Examples with Tabler**
+
+When a shadcn UI example is provided (code snippet, component demo, etc.), **always replace any icon library with Tabler icons**. This applies even if the example uses `lucide-react`, `react-icons`, or any other icon library.
+
+❌ **Don't follow the example exactly if it has different icons:**
+```tsx
+// Original shadcn example (uses lucide)
+import { Archive, MoreHorizontal } from 'lucide-react'
+<Button><Archive /></Button>
+<Button><MoreHorizontal /></Button>
+```
+
+✅ **Always convert to Tabler:**
+```tsx
+// Corrected (uses Tabler)
+import { IconArchive, IconDots } from '@tabler/icons-react'
+<Button><IconArchive /></Button>
+<Button><IconDots /></Button>
+```
+
+**Examples are for STRUCTURE and LAYOUT only.** Icon references are never binding — Tabler is the single source of truth for all icons in Casamadi.
+
 ---
 
 ## Spanish-First Text

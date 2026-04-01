@@ -3,6 +3,7 @@
 import { useAuth } from '@/lib/supabase/auth-provider';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
+import TextareaAutosize from 'react-textarea-autosize';
 import { AppSidebar } from '@/components/app-sidebar';
 import {
   Breadcrumb,
@@ -19,6 +20,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Card,
@@ -27,17 +29,42 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+} from '@/components/ui/input-group';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import {
   IconSend,
   IconPlus,
   IconX,
   IconBug,
   IconCreditCard,
-  IconFlask,
+  IconCopy,
+  IconCheck,
+  IconClock,
+  IconThumbUp,
+  IconThumbDown,
+  IconRefresh,
+  IconMessage,
 } from '@tabler/icons-react';
 import { ES } from '@/lib/spanish';
 
@@ -46,7 +73,9 @@ interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
+  responseTime?: number;
   toolCalls?: any[];
+  reaction?: 'positive' | 'negative' | null;
 }
 
 interface SandboxSession {
@@ -65,6 +94,8 @@ export default function SandboxPage() {
   const [messageInput, setMessageInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [debugOpen, setDebugOpen] = useState(true);
+  const [requestStartTime, setRequestStartTime] = useState<number | null>(null);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Check auth access
@@ -127,6 +158,7 @@ export default function SandboxPage() {
       role: 'user',
       content: messageInput,
       timestamp: new Date(),
+      reaction: null,
     };
 
     const updatedSessions = sessions.map((s) =>
@@ -137,6 +169,7 @@ export default function SandboxPage() {
     setSessions(updatedSessions);
     setMessageInput('');
     setLoading(true);
+    setRequestStartTime(Date.now());
 
     try {
       // Call agent via /api/sandbox/chat
@@ -149,6 +182,7 @@ export default function SandboxPage() {
         }),
       });
 
+      const responseTime = Date.now() - (requestStartTime || Date.now());
       const data = await response.json();
 
       if (data.success) {
@@ -158,7 +192,9 @@ export default function SandboxPage() {
           role: 'assistant',
           content: data.reply,
           timestamp: new Date(),
+          responseTime,
           toolCalls: data.toolCalls,
+          reaction: null,
         };
 
         setSessions((prevSessions) =>
@@ -175,6 +211,7 @@ export default function SandboxPage() {
           role: 'system',
           content: `Error: ${data.error || 'Failed to get response'}`,
           timestamp: new Date(),
+          reaction: null,
         };
 
         setSessions((prevSessions) =>
@@ -191,6 +228,7 @@ export default function SandboxPage() {
         role: 'system',
         content: `Network error: ${error instanceof Error ? error.message : String(error)}`,
         timestamp: new Date(),
+        reaction: null,
       };
 
       setSessions((prevSessions) =>
@@ -202,7 +240,31 @@ export default function SandboxPage() {
       );
     } finally {
       setLoading(false);
+      setRequestStartTime(null);
     }
+  };
+
+  const addReaction = (messageId: string, reaction: 'positive' | 'negative') => {
+    setSessions((prevSessions) =>
+      prevSessions.map((s) =>
+        s.id === activeSessionId
+          ? {
+              ...s,
+              messages: s.messages.map((msg) =>
+                msg.id === messageId
+                  ? { ...msg, reaction: msg.reaction === reaction ? null : reaction }
+                  : msg
+              ),
+            }
+          : s
+      )
+    );
+  };
+
+  const copyMessageContent = (content: string, messageId: string) => {
+    navigator.clipboard.writeText(content);
+    setCopiedMessageId(messageId);
+    setTimeout(() => setCopiedMessageId(null), 2000);
   };
 
   const simulatePayment = async () => {
@@ -222,6 +284,7 @@ export default function SandboxPage() {
         role: 'system',
         content: data.message || 'Payment simulated',
         timestamp: new Date(),
+        reaction: null,
       };
 
       setSessions((prevSessions) =>
@@ -237,6 +300,7 @@ export default function SandboxPage() {
         role: 'system',
         content: `Payment simulation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         timestamp: new Date(),
+        reaction: null,
       };
 
       setSessions((prevSessions) =>
@@ -309,11 +373,12 @@ export default function SandboxPage() {
           </Breadcrumb>
         </header>
 
-        <div className="flex flex-1 gap-4 p-4">
+        <div className="flex flex-1 overflow-hidden">
           {/* Chat Area */}
           <div className="flex-1 flex flex-col">
             <Tabs value={activeSessionId} onValueChange={setActiveSessionId} className="flex-1 flex flex-col">
-              <div className="flex items-center justify-between border-b mb-4">
+              {/* Tabs Header */}
+              <div className="flex items-center justify-between border-b px-4 pt-4">
                 <TabsList className="w-auto">
                   {sessions.map((session) => (
                     <div key={session.id} className="relative">
@@ -323,7 +388,7 @@ export default function SandboxPage() {
                       {sessions.length > 1 && (
                         <button
                           onClick={() => deleteSession(session.id)}
-                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded transition-colors"
                         >
                           <IconX className="h-3 w-3" />
                         </button>
@@ -335,142 +400,395 @@ export default function SandboxPage() {
                   size="sm"
                   variant="outline"
                   onClick={createNewSession}
+                  className="ml-2"
                 >
                   <IconPlus className="h-4 w-4 mr-2" />
-                  New Test
+                  New
                 </Button>
               </div>
 
+              {/* Chat Content */}
               {sessions.map((session) => (
-                <TabsContent key={session.id} value={session.id} className="flex-1 flex flex-col">
-                  {/* Messages */}
-                  <ScrollArea
-                    ref={scrollRef}
-                    className="flex-1 border rounded-lg p-4 mb-4 bg-muted/30"
-                  >
-                    <div className="space-y-3">
-                      {session.messages.map((msg) => (
-                        <div
-                          key={msg.id}
-                          className={`flex ${
-                            msg.role === 'user' ? 'justify-end' : 'justify-start'
-                          }`}
-                        >
-                          <div
-                            className={`max-w-xs lg:max-w-md px-3 py-2 rounded-lg ${
-                              msg.role === 'user'
-                                ? 'bg-primary text-primary-foreground'
-                                : msg.role === 'system'
-                                ? 'bg-muted text-muted-foreground'
-                                : 'bg-secondary'
-                            }`}
-                          >
-                            <p className="text-sm">{msg.content}</p>
-                            {msg.toolCalls && msg.toolCalls.length > 0 && (
-                              <div className="mt-2 text-xs opacity-75">
-                                <p className="font-semibold">Tools called:</p>
-                                {msg.toolCalls.map((call: any, i: number) => (
-                                  <p key={i}>{call.name}</p>
-                                ))}
-                              </div>
-                            )}
-                            <p className="text-xs mt-1 opacity-70">
-                              {msg.timestamp.toLocaleTimeString('es-MX')}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                <TabsContent
+                  key={session.id}
+                  value={session.id}
+                  className="flex-1 flex flex-col overflow-hidden"
+                >
+                  {/* Messages Area */}
+                  {session.messages.length === 0 ? (
+                    <Empty className="flex-1 flex items-center justify-center">
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <IconMessage className="h-12 w-12" />
+                        </EmptyMedia>
+                        <EmptyTitle>Start a Conversation</EmptyTitle>
+                        <EmptyDescription className="max-w-xs text-pretty">
+                          Begin testing the agent by sending your first message. Type in Spanish or English.
+                        </EmptyDescription>
+                      </EmptyHeader>
+                      <EmptyContent>
+                        <p className="text-xs text-muted-foreground">
+                          💡 Try: "Quiero hacer una reserva"
+                        </p>
+                      </EmptyContent>
+                    </Empty>
+                  ) : (
+                    <ScrollArea
+                      ref={scrollRef}
+                      className="flex-1 overflow-hidden"
+                    >
+                      <div className="px-4 py-4 space-y-4 max-w-4xl">
+                        {session.messages.map((msg) => (
+                          <ContextMenu key={msg.id}>
+                            <ContextMenuTrigger asChild>
+                              <div
+                                className={`flex ${
+                                  msg.role === 'user'
+                                    ? 'justify-end'
+                                    : 'justify-start'
+                                }`}
+                              >
+                                <div
+                                  className={`group max-w-xl lg:max-w-2xl px-4 py-3 rounded-lg ${
+                                    msg.role === 'user'
+                                      ? 'bg-primary text-primary-foreground rounded-br-none'
+                                      : msg.role === 'system'
+                                      ? 'bg-muted text-muted-foreground rounded-bl-none'
+                                      : 'bg-secondary text-secondary-foreground rounded-bl-none'
+                                  }`}
+                                >
+                                  {/* Message Content */}
+                                  <p className="text-sm leading-relaxed">
+                                    {msg.content}
+                                  </p>
 
-                  {/* Input */}
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Escribe un mensaje..."
-                      value={messageInput}
-                      onChange={(e) => setMessageInput(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          sendMessage();
-                        }
-                      }}
-                      disabled={loading}
-                    />
-                    <Button
-                      onClick={sendMessage}
-                      disabled={loading || !messageInput.trim()}
-                      size="icon"
-                    >
-                      <IconSend className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      onClick={simulatePayment}
-                      variant="outline"
-                      size="icon"
-                      title="Simular pago"
-                    >
-                      <IconCreditCard className="h-4 w-4" />
-                    </Button>
+                                  {/* Tool Calls Info */}
+                                  {msg.toolCalls && msg.toolCalls.length > 0 && (
+                                    <div className="mt-3 pt-2 border-t border-current border-opacity-20">
+                                      <p className="text-xs font-semibold opacity-75 mb-1">
+                                        Tools Used:
+                                      </p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {msg.toolCalls.map(
+                                          (call: any, i: number) => (
+                                            <Badge
+                                              key={i}
+                                              variant="secondary"
+                                              className="text-xs"
+                                            >
+                                              {call.name}
+                                            </Badge>
+                                          )
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Message Metadata */}
+                                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-current border-opacity-20 opacity-70">
+                                    <span className="text-xs">
+                                      {msg.timestamp.toLocaleTimeString(
+                                        'es-MX',
+                                        {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                        }
+                                      )}
+                                    </span>
+                                    {msg.responseTime && (
+                                      <>
+                                        <span className="text-opacity-50">•</span>
+                                        <span className="text-xs flex items-center gap-1">
+                                          <IconClock className="h-3 w-3" />
+                                          {msg.responseTime}ms
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
+
+                                  {/* Reactions for Assistant Messages */}
+                                  {msg.role === 'assistant' && (
+                                    <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button
+                                        onClick={() =>
+                                          addReaction(msg.id, 'positive')
+                                        }
+                                        className={`p-1.5 rounded hover:bg-black/10 transition-colors ${
+                                          msg.reaction === 'positive'
+                                            ? 'bg-black/10'
+                                            : ''
+                                        }`}
+                                        title="Good response"
+                                      >
+                                        <IconThumbUp
+                                          className={`h-4 w-4 ${
+                                            msg.reaction === 'positive'
+                                              ? 'fill-current'
+                                              : ''
+                                          }`}
+                                        />
+                                      </button>
+                                      <button
+                                        onClick={() =>
+                                          addReaction(msg.id, 'negative')
+                                        }
+                                        className={`p-1.5 rounded hover:bg-black/10 transition-colors ${
+                                          msg.reaction === 'negative'
+                                            ? 'bg-black/10'
+                                            : ''
+                                        }`}
+                                        title="Bad response"
+                                      >
+                                        <IconThumbDown
+                                          className={`h-4 w-4 ${
+                                            msg.reaction === 'negative'
+                                              ? 'fill-current'
+                                              : ''
+                                          }`}
+                                        />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </ContextMenuTrigger>
+
+                            {/* Context Menu */}
+                            <ContextMenuContent className="w-48">
+                              <ContextMenuItem
+                                onClick={() =>
+                                  copyMessageContent(msg.content, msg.id)
+                                }
+                              >
+                                {copiedMessageId === msg.id ? (
+                                  <>
+                                    <IconCheck className="h-4 w-4 mr-2" />
+                                    Copied
+                                  </>
+                                ) : (
+                                  <>
+                                    <IconCopy className="h-4 w-4 mr-2" />
+                                    Copy
+                                  </>
+                                )}
+                              </ContextMenuItem>
+                              <ContextMenuSeparator />
+                              <ContextMenuItem disabled>
+                                <span className="text-xs text-muted-foreground">
+                                  ID: {msg.id.substring(0, 12)}...
+                                </span>
+                              </ContextMenuItem>
+                              {msg.responseTime && (
+                                <ContextMenuItem disabled>
+                                  <span className="text-xs text-muted-foreground">
+                                    Response: {msg.responseTime}ms
+                                  </span>
+                                </ContextMenuItem>
+                              )}
+                              <ContextMenuSeparator />
+                              <ContextMenuItem
+                                variant="destructive"
+                                onClick={() => {
+                                  setSessions((prev) =>
+                                    prev.map((s) =>
+                                      s.id === activeSessionId
+                                        ? {
+                                            ...s,
+                                            messages: s.messages.filter(
+                                              (m) => m.id !== msg.id
+                                            ),
+                                          }
+                                        : s
+                                    )
+                                  );
+                                }}
+                              >
+                                Delete
+                              </ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  )}
+
+                  {/* Input Area */}
+                  <div className="border-t bg-background p-4 space-y-2">
+                    {/* Action Buttons */}
+                    <ButtonGroup>
+                      <Button
+                        onClick={simulatePayment}
+                        variant="outline"
+                        size="sm"
+                        title="Simulate payment webhook"
+                        disabled={loading}
+                      >
+                        <IconCreditCard className="h-4 w-4 mr-2" />
+                        Simulate Payment
+                      </Button>
+                      <Button
+                        onClick={() => setDebugOpen(!debugOpen)}
+                        variant="outline"
+                        size="sm"
+                        title="Toggle debug panel"
+                      >
+                        <IconBug className="h-4 w-4 mr-2" />
+                        Debug
+                      </Button>
+                    </ButtonGroup>
+
+                    {/* Message Input */}
+                    <InputGroup>
+                      <TextareaAutosize
+                        data-slot="input-group-control"
+                        className="flex field-sizing-content min-h-12 max-h-32 w-full resize-none rounded-md bg-transparent px-3 py-2.5 text-sm transition-[color,box-shadow] outline-none placeholder:text-muted-foreground"
+                        placeholder="Escribe un mensaje... (Shift+Enter para nueva línea)"
+                        value={messageInput}
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessageInput(e.target.value)}
+                        onKeyPress={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+                          if (
+                            e.key === 'Enter' &&
+                            !e.shiftKey &&
+                            !loading
+                          ) {
+                            e.preventDefault();
+                            sendMessage();
+                          }
+                        }}
+                        disabled={loading}
+                      />
+                      <InputGroupAddon align="block-end">
+                        <InputGroupButton
+                          className="ml-auto"
+                          size="sm"
+                          variant="default"
+                          onClick={sendMessage}
+                          disabled={
+                            loading ||
+                            !messageInput.trim()
+                          }
+                        >
+                          {loading ? (
+                            <div className="h-4 w-4 border border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : (
+                            <IconSend className="h-4 w-4" />
+                          )}
+                        </InputGroupButton>
+                      </InputGroupAddon>
+                    </InputGroup>
                   </div>
                 </TabsContent>
               ))}
             </Tabs>
           </div>
 
-          {/* Debug Panel */}
+          {/* Debug Sidebar */}
           {debugOpen && (
-            <Card className="w-80 flex flex-col">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <Card className="w-80 flex flex-col border-l rounded-none">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 border-b">
                 <div className="flex items-center gap-2">
                   <IconBug className="h-4 w-4" />
-                  <CardTitle className="text-base">Debug</CardTitle>
+                  <CardTitle className="text-sm">Debug Panel</CardTitle>
                   <Badge variant="outline" className="text-xs">
                     SANDBOX
                   </Badge>
                 </div>
                 <button
                   onClick={() => setDebugOpen(false)}
-                  className="p-1 hover:bg-muted rounded"
+                  className="p-1 hover:bg-muted rounded transition-colors"
                 >
                   <IconX className="h-4 w-4" />
                 </button>
               </CardHeader>
-              <CardContent className="flex-1 flex flex-col space-y-3 overflow-hidden">
-                <div className="text-xs space-y-2">
-                  <div>
-                    <p className="font-semibold text-muted-foreground">Session ID</p>
-                    <p className="font-mono break-all text-xs opacity-75">
-                      {activeSessionId}
+
+              <CardContent className="flex-1 flex flex-col space-y-4 overflow-hidden pt-4">
+                {/* Session Info */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground">
+                    Session
+                  </h3>
+                  <div className="space-y-1 text-xs">
+                    <p className="break-all font-mono text-muted-foreground">
+                      {activeSessionId.substring(0, 20)}...
                     </p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-muted-foreground">Messages</p>
-                    <p className="text-sm">
-                      {activeSession?.messages.length || 0}
+                    <p className="text-muted-foreground">
+                      Messages: {activeSession?.messages.length || 0}
                     </p>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-muted-foreground">Channel</p>
-                    <Badge variant="secondary">sandbox</Badge>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-muted-foreground">Status</p>
-                    <Badge variant="outline" className="bg-green-500/10">
-                      Ready
+                    <Badge variant="secondary" className="text-xs">
+                      Channel: sandbox
                     </Badge>
                   </div>
                 </div>
+
                 <Separator />
-                <div className="text-xs flex-1 overflow-auto">
-                  <p className="font-semibold text-muted-foreground mb-2">
-                    Quick Commands
-                  </p>
+
+                {/* Stats */}
+                {activeSession && activeSession.messages.length > 0 && (
+                  <>
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-semibold text-muted-foreground">
+                        Stats
+                      </h3>
+                      <div className="space-y-1 text-xs text-muted-foreground">
+                        <p>
+                          User Messages:{' '}
+                          {
+                            activeSession.messages.filter(
+                              (m) => m.role === 'user'
+                            ).length
+                          }
+                        </p>
+                        <p>
+                          Assistant Messages:{' '}
+                          {
+                            activeSession.messages.filter(
+                              (m) => m.role === 'assistant'
+                            ).length
+                          }
+                        </p>
+                        <p>
+                          Avg Response:{' '}
+                          {(
+                            activeSession.messages
+                              .filter((m) => m.responseTime)
+                              .reduce(
+                                (sum, m) => sum + (m.responseTime || 0),
+                                0
+                              ) /
+                            activeSession.messages.filter(
+                              (m) => m.responseTime
+                            ).length
+                          ).toFixed(0)}
+                          ms
+                        </p>
+                      </div>
+                    </div>
+
+                    <Separator />
+                  </>
+                )}
+
+                {/* Quick Commands */}
+                <div className="space-y-2 flex-1 overflow-auto">
+                  <h3 className="text-xs font-semibold text-muted-foreground">
+                    Quick Test
+                  </h3>
                   <div className="space-y-1 text-xs">
-                    <p>📅 "Quiero reservar 2 noches"</p>
-                    <p>🔗 "Necesito una habitación doble"</p>
-                    <p>💳 "Confirmar reservación"</p>
-                    <p>📞 "Necesito más toallas"</p>
+                    <p className="text-muted-foreground">
+                      📅 "Quiero reservar 2 noches"
+                    </p>
+                    <p className="text-muted-foreground">
+                      🔗 "Necesito una habitación doble"
+                    </p>
+                    <p className="text-muted-foreground">
+                      💳 "Confirmar reservación"
+                    </p>
+                    <p className="text-muted-foreground">
+                      📞 "Necesito más toallas"
+                    </p>
+                    <p className="text-muted-foreground">
+                      ❌ "Cancelar reservación"
+                    </p>
                   </div>
                 </div>
               </CardContent>

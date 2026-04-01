@@ -43,7 +43,7 @@ Development is organized into 6 epics. Complete each epic fully before starting 
 - HMAC-SHA256 signature verification
 - Redis message deduplication
 - Supabase guest + conversation upsert
-- Basic AI reply via OpenRouter (no tools yet)
+- Basic AI reply via OipenRouter (no tools yet)
 - Bilingual logic: Spanish first, English on demand
 - Cloudbeds OAuth token management
 - Token refresh + persistence to Supabase

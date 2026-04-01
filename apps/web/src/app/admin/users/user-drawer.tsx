@@ -52,7 +52,7 @@ import { StaffUser } from './columns';
 import { createStaffUser, updateStaffUserRole } from './actions';
 
 interface UserDrawerProps {
-  trigger?: React.ReactNode;
+  trigger?: React.ReactNode | null;
   onUserSaved?: () => void;
   editingUser?: StaffUser | null;
 }
@@ -271,9 +271,11 @@ export function UserDrawer({
   if (!isMobile) {
     return (
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          {trigger || <Button>{ES.users.addUser}</Button>}
-        </DialogTrigger>
+        {trigger !== null && (
+          <DialogTrigger asChild>
+            {trigger || <Button>{ES.users.addUser}</Button>}
+          </DialogTrigger>
+        )}
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>
@@ -300,9 +302,11 @@ export function UserDrawer({
   // Mobile: Drawer
   return (
     <Drawer open={open} onOpenChange={setOpen}>
-      <DrawerTrigger asChild>
-        {trigger || <Button>{ES.users.addUser}</Button>}
-      </DrawerTrigger>
+      {trigger !== null && (
+        <DrawerTrigger asChild>
+          {trigger || <Button>{ES.users.addUser}</Button>}
+        </DrawerTrigger>
+      )}
       <DrawerContent>
         <DrawerHeader className="text-left">
           <DrawerTitle>

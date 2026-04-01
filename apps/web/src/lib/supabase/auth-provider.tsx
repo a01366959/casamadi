@@ -15,32 +15,27 @@ type User = {
   };
 };
 
-// Ensure user record exists in database (for RLS to work)
+// Note: User records are auto-created via Postgres trigger on auth signup
+// This function is kept as a safety check (should rarely if ever be needed)
 async function ensureUserExists(supabase: any, userId: string, email: string) {
   try {
-    // Check if user already exists
-    const { data: existingUser } = await supabase
+    const { data: existingUser, error: fetchError } = await supabase
       .from('users')
       .select('id')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
+    if (fetchError) {
+      console.warn('Error checking user record:', fetchError);
+    }
+    
+    // If user doesn't exist, the Postgres trigger should have created it
+    // Log warning if it's been more than a few seconds and still missing
     if (!existingUser) {
-      // Create user record for this hotel
-      const { error } = await supabase
-        .from('users')
-        .insert({
-          id: userId,
-          hotel_id: HOTEL_BERNAL_ID,
-          email,
-          role: 'staff',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-
-      if (error) {
-        console.error('Error creating user record:', error);
-      }
+      console.warn('User record not found after auth signup (should have been auto-created by trigger)', {
+        userId,
+        email,
+      });
     }
   } catch (err) {
     console.error('Error ensuring user exists:', err);

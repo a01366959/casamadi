@@ -4,6 +4,10 @@
 
 **Never modify component structure from shadcn blocks.** Adapt data and styling only. The blocks are battle-tested and optimized for responsiveness.
 
+### Icon Library Rule
+
+**Tabler icons are mandatory everywhere.** When examples are provided from shadcn documentation or other sources with `lucide-react` icons, replace them immediately with Tabler equivalents. The shadcn example structure is binding; its icon references are not.
+
 ---
 
 ## Pattern 1: Using shadcn Blocks
@@ -204,7 +208,179 @@ Use `Skeleton` for loading, `Alert` for errors.
 
 ---
 
-## Pattern 8: API & Data Fetching
+## Pattern 8: Skeleton Loading States (Critical)
+
+**RULE: Every time you create or adjust a UI component, you MUST create a skeleton that accurately represents the final layout.**
+
+Skeletons are not placeholders — they are **visual promises**. Mismatched skeletons create jarring, unprofessional loading experiences. The skeleton must:
+1. Match the **exact shape and size** of the final content
+2. Preserve **spacing and grid layout** 
+3. Show **all major content blocks** that will appear
+4. Use `h-*` and `w-*` for precise dimensions
+
+### ✅ CORRECT: Skeleton Matches Real Content
+
+**Real Component:**
+```typescript
+<Card>
+  <CardHeader>
+    <CardTitle>Reservations</CardTitle>
+    <CardDescription>Recent bookings</CardDescription>
+  </CardHeader>
+  <CardContent>
+    <div className="space-y-4">
+      {reservations.map(r => (
+        <div key={r.id} className="flex items-center justify-between">
+          <div>
+            <p className="font-medium">{r.guestName}</p>
+            <p className="text-sm text-muted-foreground">{r.roomType}</p>
+          </div>
+          <Badge>{r.status}</Badge>
+        </div>
+      ))}
+    </div>
+  </CardContent>
+</Card>
+```
+
+**Matching Skeleton (Loading State):**
+```typescript
+{loading && (
+  <Card>
+    <CardHeader>
+      <Skeleton className="h-6 w-32 mb-2" />
+      <Skeleton className="h-4 w-48" />
+    </CardHeader>
+    <CardContent>
+      <div className="space-y-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="flex items-center justify-between">
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+            <Skeleton className="h-6 w-16" />
+          </div>
+        ))}
+      </div>
+    </CardContent>
+  </Card>
+)}
+```
+
+### ❌ WRONG: Mismatched Skeletons
+
+```typescript
+// WRONG: Single skeleton doesn't match multi-row layout
+{loading && <Skeleton className="h-24 w-full" />}
+
+// WRONG: Different spacing than real content
+{loading && (
+  <div className="space-y-1">
+    <Skeleton className="h-6 w-full" />
+    <Skeleton className="h-6 w-full" />
+  </div>
+)}
+
+// WRONG: Missing columns from real layout
+{loading && (
+  <div className="space-y-2">
+    <Skeleton className="h-4 w-full" />
+  </div>
+)}
+```
+
+### Chat Message Skeleton Example
+
+**Real Message:**
+```typescript
+<div className="flex gap-3 mb-4">
+  <Avatar className="h-8 w-8 shrink-0">
+    <AvatarImage src={message.avatar} />
+  </Avatar>
+  <div className="flex-1">
+    <p className="font-medium text-sm mb-1">{message.author}</p>
+    <Card className="p-3 bg-muted">
+      <p className="text-sm">{message.content}</p>
+      <p className="text-xs text-muted-foreground mt-2">{message.time}</p>
+    </Card>
+  </div>
+  <Button size="icon" variant="ghost">
+    <IconThumbUp className="h-4 w-4" />
+  </Button>
+</div>
+```
+
+**Matching Skeleton:**
+```typescript
+{messageLoading && (
+  <div className="flex gap-3 mb-4">
+    <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+    <div className="flex-1">
+      <Skeleton className="h-4 w-20 mb-1" />
+      <Card className="p-3 bg-muted space-y-2">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-12 mt-2" />
+      </Card>
+    </div>
+    <Skeleton className="h-8 w-8" />
+  </div>
+)}
+```
+
+### Sidebar Skeleton Example
+
+**Real Sidebar:**
+```typescript
+<Sidebar>
+  <SidebarHeader>
+    <TeamSwitcher teams={teams} />
+  </SidebarHeader>
+  <SidebarContent>
+    <NavMain items={navItems} />
+  </SidebarContent>
+</Sidebar>
+```
+
+**Matching Skeleton:**
+```typescript
+{loading && (
+  <Sidebar>
+    <SidebarHeader>
+      <div className="flex items-center gap-2 p-2">
+        <Skeleton className="h-8 w-8 rounded" />
+        <div className="flex-1 space-y-1">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-3 w-16" />
+        </div>
+      </div>
+    </SidebarHeader>
+    <SidebarContent>
+      <div className="space-y-2 p-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-10 w-full rounded" />
+        ))}
+      </div>
+    </SidebarContent>
+  </Sidebar>
+)}
+```
+
+### Checklist for Skeleton Implementation
+
+- [ ] Skeleton has **same parent container** (div, Card, etc.) as real content
+- [ ] **Grid/flexbox layout is identical** between skeleton and real content
+- [ ] **Spacing (`gap`, `space-y`, padding) matches exactly**
+- [ ] **All major content blocks are represented** (not just one placeholder)
+- [ ] **Avatar size** matches (`h-8 w-8`, `h-10 w-10`, etc.)
+- [ ] **Text width approximates** real content (40%, 60%, 80%, full)
+- [ ] **Badge/Button dimensions** are represented
+- [ ] Skeleton **disappears completely** when content loads (no flash of different layout)
+
+---
+
+## Pattern 9: API & Data Fetching
 
 Never fetch in components. Use server-side utilities or custom hooks.
 
@@ -248,6 +424,7 @@ export function MyComponent() {
 - [ ] No custom component structure — only shadcn blocks and data
 - [ ] Responsive design tested on mobile (375px) + tablet (768px) + desktop (1920px)
 - [ ] Loading and error states implemented
+- [ ] **Skeleton layout matches real content layout exactly** (see Pattern 8)
 - [ ] Component imports ordered: React → hooks → components → ui → icons → utils → data
 - [ ] Props documented with JSDoc
 - [ ] No unused imports (ESLint fails if violated)

@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useAuth } from "@/lib/supabase/auth-provider"
 import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
+import { NavAdmin } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
 import {
@@ -68,17 +68,14 @@ const data = {
       icon: <IconUsers className="h-4 w-4" />,
     },
   ],
-  projects: [
-    // Settings is now in NavUser dropdown
-  ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
   const userRole = (user?.user_metadata as any)?.role || 'staff'
 
-  // Combine nav items based on role
-  const navItems = userRole === 'admin' ? [...data.navMain, ...data.admin] : data.navMain
+  // Show admin items based on role
+  const adminItems = userRole === 'admin' ? data.admin : []
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -86,8 +83,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navItems} />
-        <NavProjects projects={data.projects} />
+        <NavMain items={data.navMain} />
+        {adminItems.length > 0 && <NavAdmin items={adminItems} />}
       </SidebarContent>
       <SidebarFooter>
         <NavUser 

@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { IconDots } from '@tabler/icons-react';
 import { ES } from '@/lib/spanish';
+import { generateTemporaryPassword } from './actions';
+import { toast } from 'sonner';
 
 export type StaffUser = {
   id: string;
@@ -43,6 +45,42 @@ const ROLE_COLORS: Record<StaffUser['role'], string> = {
 };
 
 export const columns: ColumnDef<StaffUser>[] = [
+  {
+    id: 'select',
+    header: ({ table }) => (
+      <input
+        type="checkbox"
+        checked={table.getIsAllPageRowsSelected()}
+        onChange={table.getToggleAllPageRowsSelectedHandler()}
+        aria-label="Select all"
+        className="accent-primary h-4 w-4 rounded border-gray-300"
+      />
+    ),
+    cell: ({ row }) => (
+      <input
+        type="checkbox"
+        checked={row.getIsSelected()}
+        onChange={row.getToggleSelectedHandler()}
+        aria-label="Select row"
+        className="accent-primary h-4 w-4 rounded border-gray-300"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
+    size: 32,
+    minSize: 32,
+    maxSize: 32,
+  },
+  {
+    accessorKey: 'id',
+    header: 'ID',
+    cell: ({ row }) => (
+      <span className="font-mono text-xs text-muted-foreground">USR-{row.original.id.slice(0, 4).toUpperCase()}</span>
+    ),
+    size: 80,
+    minSize: 60,
+    maxSize: 100,
+  },
   {
     accessorKey: 'first_name',
     header: ES.users.name,
@@ -112,6 +150,23 @@ export const columns: ColumnDef<StaffUser>[] = [
               }}
             >
               {ES.common.edit}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={async () => {
+                const toastId = toast.loading('Generando contraseña temporal...');
+                try {
+                  const result = await generateTemporaryPassword(user.id);
+                  await navigator.clipboard.writeText(result.password);
+                  toast.dismiss(toastId);
+                  toast.success(`Contraseña copiada: ${result.password}`);
+                } catch (err) {
+                  toast.dismiss(toastId);
+                  toast.error('Error al generar contraseña temporal');
+                  console.error(err);
+                }
+              }}
+            >
+              Generar contraseña temporal
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

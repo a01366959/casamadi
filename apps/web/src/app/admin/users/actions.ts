@@ -121,6 +121,27 @@ export async function deleteStaffUser(userId: string) {
   }
 }
 
+export async function generateTemporaryPassword(userId: string) {
+  const supabase = createAdminClient();
+
+  try {
+    // Generate a temporary password
+    const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12);
+
+    // Update auth user password
+    const { error } = await supabase.auth.admin.updateUserById(userId, {
+      password: tempPassword,
+    });
+
+    if (error) throw error;
+
+    return { success: true, password: tempPassword };
+  } catch (err) {
+    console.error('Error generating temporary password:', err);
+    throw err;
+  }
+}
+
 export async function getAllUsers() {
   const supabase = createAdminClient();
 

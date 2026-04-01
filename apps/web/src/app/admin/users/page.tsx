@@ -173,7 +173,7 @@ export default function UsersPage() {
       <AppSidebar />
       <SidebarInset>
         <header className="sticky top-0 flex shrink-0 items-center justify-between gap-2 border-b bg-background p-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
             <Breadcrumb>
@@ -189,8 +189,9 @@ export default function UsersPage() {
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
+            <div className="flex-1" />
+            <UserDrawer onUserSaved={fetchUsers} />
           </div>
-          <UserDrawer onUserSaved={fetchUsers} />
         </header>
 
         <div className="flex-1 overflow-auto p-4 md:p-6">
@@ -210,6 +211,7 @@ export default function UsersPage() {
         {/* Edit User Drawer */}
         {editingUser && (
           <UserDrawer
+            trigger={null}
             editingUser={editingUser}
             onUserSaved={() => {
               setEditingUser(null);

@@ -79,7 +79,7 @@ const data = {
 interface SettingsDialogProps {
   open?: boolean
   onOpenChange?: (open: boolean) => void
-  trigger?: React.ReactNode
+  trigger?: React.ReactNode | null
 }
 
 export function SettingsDialog({
@@ -95,11 +95,16 @@ export function SettingsDialog({
 
   const activeItem = data.nav.find((item) => item.key === activeTab)
 
+  // Only render DialogTrigger if trigger is explicitly provided (not null)
+  const shouldRenderTrigger = trigger !== null
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger || <Button size="sm">{ES.nav.settings}</Button>}
-      </DialogTrigger>
+      {shouldRenderTrigger && (
+        <DialogTrigger asChild>
+          {trigger || <Button size="sm">{ES.nav.settings}</Button>}
+        </DialogTrigger>
+      )}
       <DialogContent className="overflow-hidden p-0 md:max-h-[500px] md:max-w-[700px] lg:max-w-[800px]">
         <DialogTitle className="sr-only">{ES.nav.settings}</DialogTitle>
         <DialogDescription className="sr-only">
