@@ -31,6 +31,7 @@ export default async function sandboxRoutes(app: FastifyInstance) {
    */
   app.post<{ Body: SandboxMessage }>('/chat', async (request, reply) => {
     const isDev = process.env.NODE_ENV === 'development';
+    const SANDBOX_ECHO_MODE = process.env.SANDBOX_ECHO_MODE === 'true'; // For testing
 
     try {
       const { hotel_id, phone, message, message_id, channel = 'sandbox' } = request.body;
@@ -52,6 +53,17 @@ export default async function sandboxRoutes(app: FastifyInstance) {
         'Sandbox message received'
       );
 
+      // ECHO MODE: Just echo back the message (for quick testing)
+      if (SANDBOX_ECHO_MODE) {
+        return {
+          success: true,
+          message_id: finalMessageId,
+          reply: `Echo: ${message}`,
+          language: message.toLowerCase().includes('hello') ? 'en' : 'es',
+          toolCalls: [],
+        } as SandboxResponse;
+      }
+
       // SANDBOX: Synchronous processing (block and wait for agent reply)
       // Different from production which uses async processing
       try {
@@ -72,14 +84,15 @@ export default async function sandboxRoutes(app: FastifyInstance) {
           toolCalls: [],
         } as SandboxResponse;
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
         logger.error(
-          { hotel_id, phone, messageId: finalMessageId, err },
+          { hotel_id, phone, messageId: finalMessageId, error: errorMessage, stack: err instanceof Error ? err.stack : undefined },
           'Sandbox message processing failed'
         );
         reply.code(500);
         return {
           success: false,
-          error: 'Failed to process message',
+          error: `Failed to process message: ${errorMessage}`,
         } as SandboxResponse;
       }
     } catch (err) {
@@ -149,57 +162,66 @@ async function processMessageSync(
   channel: string,
   isDev: boolean
 ): Promise<{ reply: string; language: string }> {
-  // 1. Check for duplicates (dedup)
-  const isDuplicate = await isDuplicateMessage(hotel_id, channel, message_id);
-  if (isDuplicate) {
-    logger.info({ hotel_id, phone, message_id }, 'Duplicate message skipped');
-    return { reply: 'Duplicate message detected', language: 'es' };
-  }
-
-  // 2. Get or create conversation
-  const conversation = await getOrCreateConversation(
-    hotel_id,
-    phone,
-    channel
+  // Set a timeout for the entire operation (30 seconds)
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Message processing timeout (30s)')), 30000)
   );
 
-  logger.debug(
-    { hotel_id, conversationId: conversation.id, phone },
-    'Conversation ready'
-  );
+  const processPromise = (async () => {
+    // 1. Check for duplicates (dedup)
+    const isDuplicate = await isDuplicateMessage(hotel_id, channel, message_id);
+    if (isDuplicate) {
+      logger.info({ hotel_id, phone, message_id }, 'Duplicate message skipped');
+      return { reply: 'Duplicate message detected', language: 'es' };
+    }
 
-  // 3. Store incoming message
-  await storeIncomingMessage(conversation.id, message, message_id);
-
-  logger.debug(
-    { hotel_id, conversationId: conversation.id, messageId: message_id },
-    'Incoming message stored'
-  );
-
-  // 4. Run agent
-  const result = await runAgent(
-    {
+    // 2. Get or create conversation
+    const conversation = await getOrCreateConversation(
       hotel_id,
-      conversation_id: conversation.id,
-      guest_message: message,
-      current_language: conversation.language,
-    },
-    { isDev }
-  );
-
-  logger.info(
-    {
-      hotel_id,
-      conversationId: conversation.id,
       phone,
-      messageId: message_id,
-      language: result.language,
-    },
-    'Sandbox message processed successfully'
-  );
+      channel
+    );
 
-  return {
-    reply: result.reply,
-    language: result.language,
-  };
+    logger.debug(
+      { hotel_id, conversationId: conversation.id, phone },
+      'Conversation ready'
+    );
+
+    // 3. Store incoming message
+    await storeIncomingMessage(conversation.id, message, message_id);
+
+    logger.debug(
+      { hotel_id, conversationId: conversation.id, messageId: message_id },
+      'Incoming message stored'
+    );
+
+    // 4. Run agent
+    const result = await runAgent(
+      {
+        hotel_id,
+        conversation_id: conversation.id,
+        guest_message: message,
+        current_language: conversation.language,
+      },
+      { isDev }
+    );
+
+    logger.info(
+      {
+        hotel_id,
+        conversationId: conversation.id,
+        phone,
+        messageId: message_id,
+        language: result.language,
+      },
+      'Sandbox message processed successfully'
+    );
+
+    return {
+      reply: result.reply,
+      language: result.language,
+    };
+  })();
+
+  return Promise.race([processPromise, timeoutPromise]);
 }
