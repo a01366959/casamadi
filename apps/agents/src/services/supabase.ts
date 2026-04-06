@@ -17,14 +17,41 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
 });
 
 /**
+ * Get hotel UUID by slug (called hotel_id in API)
+ * hotel_id parameter is actually the slug (e.g. "hotel-bernal")
+ */
+export async function getHotelUuid(hotel_slug: string): Promise<string> {
+  try {
+    const { data, error } = await supabase
+      .from('hotels')
+      .select('id')
+      .eq('slug', hotel_slug)
+      .single();
+
+    if (error) {
+      logger.error({ hotel_slug, error }, 'Failed to resolve hotel slug to UUID');
+      throw error;
+    }
+
+    return data.id;
+  } catch (err) {
+    logger.error({ hotel_slug, err }, 'Hotel slug resolution error');
+    throw err;
+  }
+}
+
+/**
  * Get hotel configuration from database
  */
 export async function getHotelConfig(hotel_id: string) {
   try {
+    // hotel_id is actually the slug, resolve to UUID first
+    const hotelUuid = await getHotelUuid(hotel_id);
+
     const { data, error } = await supabase
       .from('hotels')
       .select('*')
-      .eq('id', hotel_id)
+      .eq('id', hotelUuid)
       .single();
 
     if (error) {
@@ -40,45 +67,44 @@ export async function getHotelConfig(hotel_id: string) {
 }
 
 /**
- * Get or create guest user by phone
+ * Get or create guest by phone
+ * Returns guest object with id
  */
-export async function getOrCreateGuestUser(
-  hotel_id: string,
-  guest_phone: string
+export async function getOrCreateGuest(
+  hotel_slug: string,
+  guest_phone: string,
+  channel: string = 'sandbox'
 ) {
   try {
-    // Try to find existing guest
+    // 1. Resolve hotel slug to UUID
+    const hotelUuid = await getHotelUuid(hotel_slug);
+
+    // 2. Try to find existing guest
     let { data: guest, error: findError } = await supabase
-      .from('users')
+      .from('guests')
       .select('id')
-      .eq('hotel_id', hotel_id)
+      .eq('hotel_id', hotelUuid)
       .eq('phone', guest_phone)
-      .eq('role', 'guest')
       .single();
 
     // If not found, create new guest
     if (findError?.code === 'PGRST116' || !guest) {
-      logger.info({ hotel_id, guest_phone }, 'Creating new guest user');
+      logger.info({ hotel_slug, hotelUuid, guest_phone }, 'Creating new guest');
 
-      // Create a fake email for guests (they use phone only)
-      const fakeEmail = `guest-${Date.now()}-${Math.random().toString(36).substring(7)}@hotel.local`;
-
-      // For now, just create a user profile record (auth user creation requires different handling)
       const { data: newGuest, error: createError } = await supabase
-        .from('users')
+        .from('guests')
         .insert({
           id: randomUUID(),
-          hotel_id,
-          email: fakeEmail,
+          hotel_id: hotelUuid,
           phone: guest_phone,
-          role: 'guest',
-          status: 'active',
+          channel,
+          channel_user_id: guest_phone, // Use phone as channel ID for sandbox
         })
         .select('id')
         .single();
 
       if (createError) {
-        logger.error({ hotel_id, guest_phone, createError }, 'Failed to create guest user');
+        logger.error({ hotel_slug, guest_phone, createError }, 'Failed to create guest');
         throw createError;
       }
 
@@ -87,32 +113,36 @@ export async function getOrCreateGuestUser(
 
     return guest;
   } catch (err) {
-    logger.error({ hotel_id, guest_phone, err }, 'Guest user fetch/create error');
+    logger.error({ hotel_slug, guest_phone, err }, 'Guest fetch/create error');
     throw err;
   }
 }
 
 /**
  * Get or create conversation
+ * hotel_id parameter is actually the hotel slug (e.g. "hotel-bernal")
  */
 export async function getOrCreateConversation(
-  hotel_id: string,
+  hotel_slug: string,
   guest_phone: string,
   channel: string
 ) {
   try {
-    // 1. First, get or create guest user
-    const guest = await getOrCreateGuestUser(hotel_id, guest_phone);
+    // 1. Resolve hotel slug to UUID
+    const hotelUuid = await getHotelUuid(hotel_slug);
+
+    // 2. Get or create guest
+    const guest = await getOrCreateGuest(hotel_slug, guest_phone, channel);
 
     if (!guest || !guest.id) {
-      throw new Error('Failed to get/create guest user');
+      throw new Error('Failed to get/create guest');
     }
 
-    // 2. Try to find existing active conversation
+    // 3. Try to find existing active conversation
     let { data: conversation, error: convError } = await supabase
       .from('conversations')
       .select('*')
-      .eq('hotel_id', hotel_id)
+      .eq('hotel_id', hotelUuid)
       .eq('guest_id', guest.id)
       .eq('channel', channel)
       .eq('status', 'active')
@@ -123,14 +153,14 @@ export async function getOrCreateConversation(
     // If no active conversation, create one
     if (convError?.code === 'PGRST116' || !conversation) {
       logger.info(
-        { hotel_id, guest_id: guest.id, channel },
+        { hotel_slug, hotelUuid, guest_id: guest.id, channel },
         'Creating new conversation'
       );
 
       const { data: newConv, error: createError } = await supabase
         .from('conversations')
         .insert({
-          hotel_id,
+          hotel_id: hotelUuid,
           guest_id: guest.id,
           channel,
           status: 'active',
@@ -141,7 +171,7 @@ export async function getOrCreateConversation(
         .single();
 
       if (createError) {
-        logger.error({ hotel_id, guest_id: guest.id, createError }, 'Failed to create conversation');
+        logger.error({ hotel_slug, guest_id: guest.id, createError }, 'Failed to create conversation');
         throw createError;
       }
 
@@ -150,9 +180,19 @@ export async function getOrCreateConversation(
 
     return conversation;
   } catch (err) {
-    logger.error({ hotel_id, guest_phone, channel, err }, 'Conversation fetch/create error');
+    logger.error({ hotel_slug, guest_phone, channel, err }, 'Conversation fetch/create error');
     throw err;
   }
+}
+
+/**
+ * Legacy function for backward compatibility - use getOrCreateGuest instead
+ */
+export async function getOrCreateGuestUser(
+  hotel_id: string,
+  guest_phone: string
+) {
+  return getOrCreateGuest(hotel_id, guest_phone, 'sandbox');
 }
 
 /**
