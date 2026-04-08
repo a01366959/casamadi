@@ -10,8 +10,8 @@
 ```
 casamadi/                          # Monorepo root
 ├── apps/
-│   ├── agent/                     # Fastify — AI agent + webhook server
-│   └── dashboard/                 # Next.js 14 — Staff PWA
+│   ├── agents/                    # Fastify — AI agent + webhook server
+│   └── web/                       # Next.js 14 — Staff PWA
 ├── packages/
 │   ├── shared/                    # TypeScript types shared by all apps
 │   └── db/                        # Supabase client + typed query helpers
@@ -55,6 +55,22 @@ casamadi/                          # Monorepo root
 | Dashboard Hosting | Vercel | Next.js-native, preview per branch |
 | Error Tracking | Railway logs (v1) | Upgrade to Sentry in v2 |
 | Version Control | GitHub | Source of truth |
+
+## 2.1 Single-Hotel Deployment Policy
+
+Casamadi is currently deployed for one hotel only. We still keep `hotel_id` in database schemas,
+queries, and internal APIs for these reasons:
+
+- RLS policies are scoped by `hotel_id`
+- existing migrations and indexes depend on `hotel_id`
+- avoiding a destructive schema rewrite during active development
+- preserving a low-risk path to multi-hotel support later
+
+Rule for now:
+
+- Keep `hotel_id` internally (DB, agent, services)
+- Avoid exposing `hotel_id` in guest-facing URLs when not necessary
+- Prefer a default hotel config for public pages in single-hotel mode
 
 ---
 
@@ -122,7 +138,7 @@ POST /webhooks/cloudbeds
 ### 3.4 Agent Directory Structure
 
 ```
-apps/agent/src/
+apps/agents/src/
 ├── index.ts                      # Fastify server bootstrap
 ├── routes/
 │   ├── health.ts                 # GET /health
@@ -205,7 +221,7 @@ const BOOKING_STATES = [
 ### 4.1 Directory Structure
 
 ```
-apps/dashboard/src/
+apps/web/src/
 ├── app/
 │   ├── layout.tsx                # Root: Inter Tight + TooltipProvider + Toaster
 │   ├── (auth)/
@@ -506,7 +522,7 @@ Resend handles two types of emails:
 1. **Magic link auth emails** — Supabase Auth configured to use Resend SMTP for delivering magic links to staff
 2. **Guest booking confirmation emails** — Agent sends via Resend after payment confirmed, as backup to WhatsApp confirmation
 
-All email templates live in `apps/agent/src/services/resend.ts`.
+All email templates live in `apps/agents/src/services/resend.ts`.
 
 ---
 

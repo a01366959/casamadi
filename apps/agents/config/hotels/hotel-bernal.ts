@@ -1,20 +1,13 @@
 /**
  * Hotel Bernal Configuration
- * AI Agent Persona, Booking Rules, Menu, Escalation Routing
+ * AI Agent Persona, Booking Rules, Escalation Routing
  *
  * Last Updated: April 2026
  * Contact: Hotel Bernal Management
+ *
+ * NOTE: Menu items, room details, and dynamic data should be fetched from database,
+ * NOT hardcoded here. This file is for: persona, instructions, hours, escalation routing.
  */
-
-export interface MenuItem {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  category: 'desayuno' | 'comida' | 'cena' | '24h';
-  available: boolean;
-  imageUrl?: string;
-}
 
 export interface StaffRole {
   role: 'recepcion' | 'room-service' | 'housekeeping' | 'manager' | 'admin';
@@ -58,8 +51,6 @@ export interface HotelConfig {
     roomService: { open: string; close: string; timezone: string };
   };
 
-  menu: MenuItem[];
-
   escalationRouting: {
     complaint: StaffRole[];
     roomServiceIssue: StaffRole[];
@@ -72,16 +63,19 @@ export interface HotelConfig {
 }
 
 /**
- * Hotel Bernal — Boutiqu hotel in Mexico City
+ * Hotel Casa Mädi — Boutique hotel in Mexico City
  * 
  * Personality:
  * Sofía is the hotel's AI concierge. She's warm, professional, always
  * bilingual (Spanish first, English on demand), and laser-focused on
  * closing bookings. She never breaks character and never admits being AI.
+ *
+ * IMPORTANT: This file contains CONFIGURATION AND INSTRUCTIONS ONLY.
+ * Dynamic data (menu, rooms, details) comes from the database.
  */
 export const hotelConfig: HotelConfig = {
   id: 'hotel-bernal',
-  name: 'Hotel Bernal',
+  name: 'Casa Mädi',
   slug: 'hotel-bernal',
   cloudbedsPropertyId: 'bernal-test', // TODO: Update with real Cloudbeds property ID
 
@@ -94,19 +88,18 @@ export const hotelConfig: HotelConfig = {
         'Si el huésped escribe en inglés, responde en inglés. Si escribe en español, responde en español.',
     },
     tone: 'warm, professional, enthusiastic, never robotic',
-    personality: `You are Sofía, the concierge AI for Hotel Bernal, a boutique hotel in Mexico City.
+    personality: `You are Sofía, the concierge AI for Casa Mädi, a boutique hotel in Mexico City.
 
 Your core traits:
 - You are warm and genuinely helpful, never robotic or stiff
-- You speak Spanish naturally as your first language (for Spanish guests)
-- You switch to English flawlessly (for English guests) but prefer Spanish when in doubt
+- You are fluent in both Spanish and English
+- You NEVER say you're an AI — you are Sofía, the hotel's concierge
 - You are customer-focused: your primary goal is to convert guests into booked, paid reservations
 - You have hotel knowledge but don't overload guests with details unless asked
 - You handle objections with grace: know when to escalate to a human team member
-- You NEVER say you're an AI — you are Sofía, the hotel's concierge
 
 Your job:
-1. Greet guests warmly and thank them for choosing Hotel Bernal
+1. Greet guests warmly and thank them for choosing Casa Mädi
 2. Help guests find available rooms for their dates and guest count
 3. Answer questions about rooms, rates, and hotel amenities
 4. Collect guest information and create bookings
@@ -123,7 +116,7 @@ Your booking personality:
 - You confirm reservations with enthusiasm and personal touch
 
 Your knowledge:
-- Hotel Bernal is a boutique property in Mexico City with 25 rooms
+- Casa Mädi is a boutique property in Mexico City with 25 rooms
 - We focus on personalized service, modern comfort, and authentic Mexican hospitality
 - We are centrally located with easy access to museums, restaurants, and the historic center
 - Check-in is 3 PM, check-out is 12 PM (both flexibly negotiable with advance notice)
@@ -195,182 +188,6 @@ Your knowledge:
       timezone: 'America/Mexico_City',
     },
   },
-
-  menu: [
-    // Breakfast (7-11 AM)
-    {
-      id: 'pan-dulce-basket',
-      name: 'Canasta de Pan Dulce',
-      description: 'Fresh sweet breads, jams, and butter',
-      price: 120,
-      category: 'desayuno',
-      available: true,
-    },
-    {
-      id: 'omelet-especial',
-      name: 'Omelette Bernal (3 eggs, chorizo, quesillo, cilantro)',
-      description: 'Chef-prepared omelet with local chorizo and fresh cheese',
-      price: 220,
-      category: 'desayuno',
-      available: true,
-    },
-    {
-      id: 'chilaquiles-verdes',
-      name: 'Chilaquiles Verdes',
-      description: 'Crispy tortilla chips with green salsa, sour cream, fresh cheese',
-      price: 180,
-      category: 'desayuno',
-      available: true,
-    },
-    {
-      id: 'huevos-rancheros',
-      name: 'Huevos Rancheros',
-      description: 'Fried eggs on corn tortillas with pico de gallo and beans',
-      price: 200,
-      category: 'desayuno',
-      available: true,
-    },
-    {
-      id: 'cafe-pastry',
-      name: 'Café + Pastry',
-      description: 'Espresso, Americano, or cappuccino with croissant or churro',
-      price: 85,
-      category: 'desayuno',
-      available: true,
-    },
-
-    // Lunch & Dinner (12-22)
-    {
-      id: 'tacos-al-pastor',
-      name: 'Tacos al Pastor (3 tacos)',
-      description: 'Marinated pork, pineapple, cilantro, onion on corn tortillas',
-      price: 150,
-      category: 'comida',
-      available: true,
-    },
-    {
-      id: 'carne-asada',
-      name: 'Carne Asada con Guacamole',
-      description:
-        'Grilled beef with fresh guacamole, grilled onions, lime, tortillas',
-      price: 380,
-      category: 'comida',
-      available: true,
-    },
-    {
-      id: 'chile-relleno',
-      name: 'Chile Relleno de Quesillo',
-      description: 'Poblano pepper stuffed with melted cheese, served with rice',
-      price: 240,
-      category: 'comida',
-      available: true,
-    },
-    {
-      id: 'sopa-tortilla',
-      name: 'Sopa de Tortilla',
-      description:
-        'Classic Mexico City tortilla soup with crispy strips, avocado, lime',
-      price: 120,
-      category: 'comida',
-      available: true,
-    },
-    {
-      id: 'quesadillas',
-      name: 'Quesadillas (3 quesadillas)',
-      description:
-        'Corn tortillas stuffed with Oaxaca cheese and your choice of filling',
-      price: 180,
-      category: 'comida',
-      available: true,
-    },
-    {
-      id: 'nopales-salad',
-      name: 'Nopal y Queso Fresco (salad)',
-      description: 'Fresh cactus, tomato, onion, cilantro, lime vinaigrette',
-      price: 140,
-      category: 'comida',
-      available: true,
-    },
-
-    // Dinner (18-22)
-    {
-      id: 'filete-encebollado',
-      name: 'Filete Encebollado',
-      description: 'Pan-seared beef tenderloin with caramelized onions',
-      price: 480,
-      category: 'cena',
-      available: true,
-    },
-    {
-      id: 'salmon-cilantro',
-      name: 'Salmón al Cilantro',
-      description: 'Fresh salmon fillet with cilantro butter, served with vegetables',
-      price: 420,
-      category: 'cena',
-      available: true,
-    },
-    {
-      id: 'mole-negro',
-      name: 'Pollo en Mole Negro',
-      description:
-        'Chicken simmered in traditional Oaxacan mole, served with rice',
-      price: 380,
-      category: 'cena',
-      available: true,
-    },
-
-    // Beverages (24h)
-    {
-      id: 'agua-fresca',
-      name: 'Agua Fresca (Horchata, Jamaica, o Tamarindo)',
-      description: 'Traditional Mexican refreshing drink',
-      price: 45,
-      category: '24h',
-      available: true,
-    },
-    {
-      id: 'margarita-classic',
-      name: 'Margarita Clásica',
-      description: 'Tequila, triple sec, fresh lime, salt rim',
-      price: 150,
-      category: '24h',
-      available: true,
-    },
-    {
-      id: 'cerveza',
-      name: 'Cerveza (Corona, Modelo, o Tecate)',
-      description: 'Selection of local Mexican beers',
-      price: 60,
-      category: '24h',
-      available: true,
-    },
-    {
-      id: 'chocolate-caliente',
-      name: 'Chocolate Caliente',
-      description: 'Traditional Mexican hot chocolate, creamy and rich',
-      price: 70,
-      category: '24h',
-      available: true,
-    },
-
-    // Desserts (24h)
-    {
-      id: 'flan',
-      name: 'Flan (Crème Caramel)',
-      description: 'Classic Mexican custard with caramel sauce',
-      price: 95,
-      category: '24h',
-      available: true,
-    },
-    {
-      id: 'churros',
-      name: 'Churros con Chocolate',
-      description: 'Fried pastry with hot chocolate for dipping',
-      price: 75,
-      category: '24h',
-      available: true,
-    },
-  ],
 
   escalationRouting: {
     complaint: [

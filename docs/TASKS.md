@@ -12,8 +12,8 @@
 ### Code Tasks (Copilot)
 
 - [x] Create monorepo root with pnpm workspaces + Turborepo
-- [x] Create `apps/agent` with Fastify + `/health` endpoint
-- [x] Create `apps/dashboard` with Next.js 14 + Tailwind
+- [x] Create `apps/agents` with Fastify + `/health` endpoint
+- [x] Create `apps/web` with Next.js 14 + Tailwind
 - [x] Install all shadcn/ui components
 - [x] Install shadcn/ui blocks: login-01, dashboard-01, sidebar-07
 - [x] Create `packages/shared` with all core types
@@ -22,7 +22,7 @@
 - [x] Create `.env.example` with all variables
 - [x] Create `supabase/migrations/001_initial_schema.sql`
 - [x] Create GitHub Actions workflows
-- [x] Create `railway.toml` in `apps/agent`
+- [x] Create `railway.toml` in `apps/agents`
 - [x] Create `README.md`
 - [x] Create `.env.local` files for both apps
 - [ ] Add `TooltipProvider` + `Toaster` to root layout
@@ -42,7 +42,7 @@
 - [x] Create Upstash Redis DB `casamadi-test`
 - [ ] Create Railway project + `agent-production` service (branch: main)
 - [ ] Create Railway project + `agent-test` service (branch: develop)
-- [ ] Import repo to Vercel, set root: `apps/dashboard`
+- [ ] Import repo to Vercel, set root: `apps/web`
 - [ ] Fix Vercel build commands (see below)
 - [x] Create OpenRouter account + API key + add $20-50 credit
 - [ ] Create Resend account + verify domain
@@ -55,7 +55,7 @@
 ### Vercel Fix (Blocker)
 
 Current issue: Vercel runs wrong build command. Try this in Vercel settings:
-- Root Directory: `apps/dashboard`
+- Root Directory: `apps/web`
 - Install Command: `pnpm install --no-frozen-lockfile`
 - Build Command: `pnpm --filter @casamadi/dashboard build`
 - Output Directory: `.next`
@@ -66,7 +66,7 @@ If Vercel keeps ignoring settings, add to repo root:
 {
   "buildCommand": "pnpm --filter @casamadi/dashboard build",
   "installCommand": "pnpm install --no-frozen-lockfile",
-  "outputDirectory": "apps/dashboard/.next",
+  "outputDirectory": "apps/web/.next",
   "framework": "nextjs"
 }
 ```
@@ -168,7 +168,7 @@ NEXT_PUBLIC_VAPID_PUBLIC_KEY=BF...
 
 **How to deploy:**
 1. Connect your GitHub repo to Vercel
-2. Set root directory to `apps/dashboard`
+2. Set root directory to `apps/web`
 3. On every push to `develop` → Vercel auto-deploys preview
 4. Preview URL appears in PR comments
 
@@ -562,7 +562,7 @@ POST /api/sandbox/simulate-payment
 ## Epic 9 — Public Menu & Real-Time Features
 
 ### Public Menu (No Auth)
-- [ ] Create `GET /menu/:hotelId` endpoint (or `GET /menu` if single hotel)
+- [ ] Create `GET /api/menu/:hotelId` endpoint (or `GET /api/menu` if single hotel)
 - [ ] Fetch active menu items from database
 - [ ] Group by section (Desayuno, Comida/Cena, 24/7)
 - [ ] Show real-time availability (based on current time + item status)
@@ -570,6 +570,7 @@ POST /api/sandbox/simulate-payment
 - [ ] Show "Available at 12:00" for sections not yet active
 - [ ] Dim unavailable sections (gray text)
 - [ ] NO ordering button on public page
+- [ ] Publish public page at `/guests/menu/:hotelId`
 - [ ] Footer: "Continue with our Agent" → link back to chat
 - [ ] Ensure CORS allows any origin (guest can share via QR)
 

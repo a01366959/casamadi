@@ -122,6 +122,21 @@ export const ES = {
     dragTip: "Arrastra para cambiar estado",
   },
 
+  // Public Menu
+  menu: {
+    title: "Menú",
+    subtitle: "Ordena desde tu habitación",
+    notAvailable: "Menú no disponible",
+    noItems: "No hay elementos disponibles en el menú",
+    itemCount: "elementos",
+    sectionBreakfast: "Desayuno",
+    sectionLunchDinner: "Comida y cena",
+    sectionAnytime: "Disponible 24/7",
+    helpTitle: "¿Necesitas ayuda?",
+    helpDescription: "Contáctanos por chat o llama a recepción para hacer tu pedido.",
+    openChat: "Abrir chat",
+  },
+
   // Settings
   settings: {
     notifications: "Notificaciones",

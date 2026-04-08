@@ -34,23 +34,50 @@ Example of ✅ **correct:**
 
 ## Typography & Emojis
 
-### No Emojis on Frontend
+### ⚠️ CRITICAL: No Emojis on Frontend
 
-❌ **Never use emojis in UI:**
+**NEVER USE EMOJIS IN ANY CODE OR UI.** This means:
+- Page titles and headers
+- Button labels and text
+- Badges, labels, tags
+- System prompts and agent messages
+- Navigation items
+- Loading states
+- ANY text visible to users
+
+The reason: Emojis render inconsistently across platforms and devices, making the UI look unprofessional and unpredictable.
+
+❌ **WRONG:**
 ```tsx
-// Wrong
-<Button>👍 Accept</Button>
-<div>🏥 Hotel Management</div>
-<Badge>✨ Premium</Badge>
+<h1>🍽️ Menu</h1>
+<Button>📞 Contact Us</Button>
+<Badge>✅ Complete</Badge>
+<p>📋 Your order: 2x Café</p>
 ```
 
-✅ **Use Tabler Icons instead:**
+✅ **CORRECT — Use Tabler Icons:**
 ```tsx
-import { IconThumbUp, IconBuilding, IconStar } from '@tabler/icons-react'
+import { IconUtensils, IconPhone, IconCheck, IconList } from '@tabler/icons-react'
 
-<Button><IconThumbUp /> Accept</Button>
-<div><IconBuilding /> Hotel Management</div>
-<Badge><IconStar /> Premium</Badge>
+<h1 className="flex items-center gap-2 text-2xl font-bold">
+  <IconUtensils className="h-6 w-6" />
+  Menu
+</h1>
+
+<Button className="flex items-center gap-2">
+  <IconPhone className="h-4 w-4" />
+  Contact Us
+</Button>
+
+<Badge variant="default" className="flex items-center gap-1">
+  <IconCheck className="h-3 w-3" />
+  Complete
+</Badge>
+
+<p className="flex items-center gap-2">
+  <IconList className="h-4 w-4" />
+  Your order: 2x Café
+</p>
 ```
 
 ### Icon Guidelines

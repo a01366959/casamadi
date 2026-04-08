@@ -148,14 +148,14 @@ git branch -d hotfix/description
 1. `pnpm install`
 2. `tsc --noEmit` on all packages
 3. `pnpm lint`
-4. Deploy `apps/agent` to Railway test
+4. Deploy `apps/agents` to Railway test
 5. Trigger Vercel preview deploy
 6. Run `supabase/migrations/*.sql` on `casamadi-test`
 
 ### `deploy-prod.yml` (on push to `main`)
 1. Same checks
-2. Deploy `apps/agent` to Railway production
-3. Deploy `apps/dashboard` to Vercel production
+2. Deploy `apps/agents` to Railway production
+3. Deploy `apps/web` to Vercel production
 4. Run migrations on `casamadi-prod`
 
 ---

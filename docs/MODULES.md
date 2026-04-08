@@ -9,8 +9,8 @@
 
 ```
 casamadi/
-├── apps/agent/          → AI Agent Backend
-├── apps/dashboard/      → Staff Dashboard PWA
+├── apps/agents/         → AI Agent Backend
+├── apps/web/            → Staff Dashboard PWA
 ├── packages/shared/     → Shared Types
 ├── packages/db/         → Database Client
 └── config/hotels/       → Hotel Configuration
@@ -18,7 +18,7 @@ casamadi/
 
 ---
 
-## Module 1: AI Agent Backend (`apps/agent`)
+## Module 1: AI Agent Backend (`apps/agents`)
 
 **Responsibility:** Receive guest messages, process through AI, reply. Handle Cloudbeds booking and payment flows. Send push notifications to staff.
 
@@ -101,7 +101,7 @@ casamadi/
 
 ---
 
-## Module 2: Staff Dashboard (`apps/dashboard`)
+## Module 2: Staff Dashboard (`apps/web`)
 
 **Responsibility:** Staff UI for managing all hotel operations. Mobile-first PWA.
 

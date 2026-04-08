@@ -140,7 +140,7 @@ Guest asks about availability
 - `/admin/inventario` — Full inventory management: add items, edit, delete, adjust stock
 
 **Public (No Auth):**
-- `GET /menu/:hotelId` — Public menu view (real-time availability, no ordering)
+- `GET /guests/menu/:hotelId` — Public menu view (real-time availability, no ordering)
 
 **PWA Requirements:**
 - Installable on iPhone (iOS 16.4+) and Android
@@ -201,7 +201,7 @@ When agent detects high sentiment, out-of-scope request, or repeated issues:
 - Item can be toggled off by Recepción/Admin — agent rejects, suggests alternatives
 - **Every Monday 00:00:** All items auto-reactivate
 - Items can be marked unavailable (e.g., "out of pizza dough") — restoration is manual or on Monday reset
-- **Public menu link** (`/menu/:hotelId`) shows real-time availability, no ordering
+- **Public menu link** (`/guests/menu/:hotelId`) shows real-time availability, no ordering
 
 **Inventory:**
 - Items: extra towels, blankets, pillows, etc. (staff-managed consumables)

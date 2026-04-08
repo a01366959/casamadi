@@ -33,7 +33,7 @@ ALL_TOOLS.forEach((tool) => {
 });
 
 // 4. Expected tools
-const expectedTools = ['check_availability', 'get_room_details', 'create_reservation', 'verify_payment'];
+const expectedTools = ['check_availability', 'get_room_details', 'create_reservation', 'verify_payment', 'get_menu'];
 console.log('\n4. Expected Tools Check:');
 expectedTools.forEach((toolName) => {
   const found = ALL_TOOLS.find((t) => t.name === toolName);

@@ -52,7 +52,7 @@ const data = {
     },
     {
       title: ES.nav.tasks,
-      url: "/tasks",
+      url: "/dashboard/tasks",
       icon: <IconChecklist className="h-4 w-4" />,
     },
   ],
@@ -72,7 +72,14 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
-  const userRole = (user?.user_metadata as any)?.role || 'staff'
+  const userMetadata = user?.user_metadata
+  const userRole =
+    userMetadata &&
+    typeof userMetadata === 'object' &&
+    'role' in userMetadata &&
+    typeof userMetadata.role === 'string'
+      ? userMetadata.role
+      : 'staff'
 
   // Show admin items based on role
   const adminItems = userRole === 'admin' ? data.admin : []

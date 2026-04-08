@@ -20,6 +20,7 @@ interface SandboxResponse {
   message_id?: string;
   reply?: string;
   language?: string;
+  reasoning?: string; // Chain of thought for debugging
   error?: string;
 }
 
@@ -33,11 +34,15 @@ export default async function sandboxRoutes(app: FastifyInstance) {
     const isDev = process.env.NODE_ENV === 'development';
     const SANDBOX_ECHO_MODE = process.env.SANDBOX_ECHO_MODE === 'true'; // For testing
 
+    console.log(`[Sandbox] === New Request ===`);
+    console.log(`[Sandbox] Body:`, JSON.stringify(request.body, null, 2));
+
     try {
       const { hotel_id, phone, message, message_id, channel = 'sandbox' } = request.body;
 
       // Validate input
       if (!hotel_id || !phone || !message) {
+        console.log(`[Sandbox] ERROR: Missing fields. hotel_id=${hotel_id}, phone=${phone}, message=${message}`);
         reply.code(400);
         return {
           success: false,
@@ -48,6 +53,8 @@ export default async function sandboxRoutes(app: FastifyInstance) {
       // Generate message ID if not provided
       const finalMessageId = message_id || `sandbox_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
+      console.log(`[Sandbox] Valid request - hotel_id=${hotel_id}, phone=${phone}, message="${message}"`);
+
       logger.debug(
         { hotel_id, phone, channel, messageId: finalMessageId },
         'Sandbox message received'
@@ -55,11 +62,13 @@ export default async function sandboxRoutes(app: FastifyInstance) {
 
       // ECHO MODE: Just echo back the message (for quick testing)
       if (SANDBOX_ECHO_MODE) {
+        console.log(`[Sandbox] ECHO MODE enabled, returning echo response`);
         return {
           success: true,
           message_id: finalMessageId,
           reply: `Echo: ${message}`,
           language: message.toLowerCase().includes('hello') ? 'en' : 'es',
+          reasoning: `ECHO MODE - Just echoing back the message for testing.`,
           toolCalls: [],
         } as SandboxResponse;
       }
@@ -67,6 +76,7 @@ export default async function sandboxRoutes(app: FastifyInstance) {
       // SANDBOX: Synchronous processing (block and wait for agent reply)
       // Different from production which uses async processing
       try {
+        console.log(`[Sandbox] Processing message synchronously...`);
         const { reply: agentReply, language } = await processMessageSync(
           hotel_id,
           phone,
@@ -76,15 +86,26 @@ export default async function sandboxRoutes(app: FastifyInstance) {
           isDev
         );
 
+        console.log(`[Sandbox] Got agent reply: "${agentReply}", language: ${language}`);
+
         return {
           success: true,
           message_id: finalMessageId,
           reply: agentReply,
           language,
+          reasoning: `Processed in sandbox mode. Language: ${language}. Used TOOL_MODEL for response generation.`,
           toolCalls: [],
         } as SandboxResponse;
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
+        let errorMessage = 'Unknown error';
+        if (err instanceof Error) {
+          errorMessage = err.message;
+        } else if (typeof err === 'object' && err !== null && 'message' in err) {
+          errorMessage = (err as any).message;
+        } else if (typeof err === 'string') {
+          errorMessage = err;
+        }
+        console.error(`[Sandbox] Processing failed:`, errorMessage);
         logger.error(
           { hotel_id, phone, messageId: finalMessageId, error: errorMessage, stack: err instanceof Error ? err.stack : undefined },
           'Sandbox message processing failed'
@@ -96,6 +117,7 @@ export default async function sandboxRoutes(app: FastifyInstance) {
         } as SandboxResponse;
       }
     } catch (err) {
+      console.error(`[Sandbox] Endpoint error:`, err);
       logger.error({ err, body: request.body }, 'Sandbox endpoint error');
       reply.code(500);
       return {
@@ -164,17 +186,23 @@ async function processMessageSync(
 ): Promise<{ reply: string; language: string }> {
   // Set a timeout for the entire operation (30 seconds)
   const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Message processing timeout (30s)')), 30000)
+    setTimeout(() => {
+      console.error(`[Sandbox] TIMEOUT: Message processing exceeded 30s`);
+      reject(new Error('Message processing timeout (30s)'));
+    }, 30000)
   );
 
   const processPromise = (async () => {
+    console.log(`[Sandbox:Process] Step 1: Checking for duplicates`);
     // 1. Check for duplicates (dedup)
     const isDuplicate = await isDuplicateMessage(hotel_id, channel, message_id);
     if (isDuplicate) {
+      console.log(`[Sandbox:Process] Duplicate detected, returning early`);
       logger.info({ hotel_id, phone, message_id }, 'Duplicate message skipped');
       return { reply: 'Duplicate message detected', language: 'es' };
     }
 
+    console.log(`[Sandbox:Process] Step 2: Getting or creating conversation`);
     // 2. Get or create conversation
     const conversation = await getOrCreateConversation(
       hotel_id,
@@ -182,11 +210,14 @@ async function processMessageSync(
       channel
     );
 
+    console.log(`[Sandbox:Process] Conversation ready: ${conversation.id}`);
+
     logger.debug(
       { hotel_id, conversationId: conversation.id, phone },
       'Conversation ready'
     );
 
+    console.log(`[Sandbox:Process] Step 3: Storing incoming message`);
     // 3. Store incoming message
     await storeIncomingMessage(conversation.id, message, message_id);
 
@@ -195,6 +226,7 @@ async function processMessageSync(
       'Incoming message stored'
     );
 
+    console.log(`[Sandbox:Process] Step 4: Running agent`);
     // 4. Run agent
     const result = await runAgent(
       {
@@ -205,6 +237,8 @@ async function processMessageSync(
       },
       { isDev }
     );
+
+    console.log(`[Sandbox:Process] Agent returned:`, JSON.stringify(result));
 
     logger.info(
       {

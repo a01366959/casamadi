@@ -179,19 +179,19 @@
 ### TD2: Error Tracking — Railway Logs (v1)
 **Decision:** Use Railway built-in logs for v1, upgrade to Sentry in v2.
 **Reason:** Keeps stack simple for initial launch. Hotel Bernal is one property — Railway logs are sufficient.
-**Implemented in:** `apps/agent/src/index.ts` (pino logger to stdout → Railway captures)
+**Implemented in:** `apps/agents/src/index.ts` (pino logger to stdout → Railway captures)
 
 ### TD3: Email Provider — Resend
 **Decision:** Use Resend for both magic link auth emails and guest booking confirmations.
 **Reason:** Simple API, great deliverability, developer-friendly.
-**Implemented in:** `apps/agent/src/services/resend.ts`, Supabase Auth SMTP configuration
+**Implemented in:** `apps/agents/src/services/resend.ts`, Supabase Auth SMTP configuration
 
 ### TD4: One Agent, Three Channels
 **Decision:** Single Fastify agent handles all three Meta channels.
 **Reason:** Channel is metadata — the AI logic is identical. Simpler to maintain one agent.
-**Implemented in:** `apps/agent/src/routes/webhook.ts` (channel extracted from payload, stored in conversation)
+**Implemented in:** `apps/agents/src/routes/webhook.ts` (channel extracted from payload, stored in conversation)
 
 ### TD5: Sandbox in Dashboard (Not Separate App)
 **Decision:** Sandbox testing interface lives at `/sandbox` inside the dashboard app, admin-only.
 **Reason:** Staff and developers use the same app. No separate deploy needed.
-**Implemented in:** `apps/dashboard/src/app/(dashboard)/sandbox/`
+**Implemented in:** `apps/web/src/app/(dashboard)/sandbox/`

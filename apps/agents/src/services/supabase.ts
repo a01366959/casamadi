@@ -220,6 +220,52 @@ export async function getConversationHistory(conversation_id: string) {
 }
 
 /**
+ * Get conversation metadata (room number, orders summary)
+ */
+export async function getConversationMetadata(conversation_id: string) {
+  try {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('room_number, orders_summary')
+      .eq('id', conversation_id)
+      .single();
+
+    if (error) {
+      // Backward compatibility: some environments may not have migration 007 yet.
+      const errorMessage = typeof error.message === 'string' ? error.message : '';
+      const isMissingRoomColumns =
+        errorMessage.includes('column conversations.room_number does not exist') ||
+        errorMessage.includes('column "room_number" does not exist') ||
+        errorMessage.includes('column conversations.orders_summary does not exist') ||
+        errorMessage.includes('column "orders_summary" does not exist') ||
+        error.code === '42703';
+
+      if (isMissingRoomColumns) {
+        logger.warn(
+          { conversation_id, error },
+          'Conversation room/order columns missing; using metadata fallback'
+        );
+        return {
+          room_number: null,
+          orders_summary: [],
+        };
+      }
+
+      logger.error({ conversation_id, error }, 'Failed to get conversation metadata');
+      throw error;
+    }
+
+    return {
+      room_number: data?.room_number || null,
+      orders_summary: data?.orders_summary || [],
+    };
+  } catch (err) {
+    logger.error({ conversation_id, err }, 'Metadata fetch error');
+    throw err;
+  }
+}
+
+/**
  * Store incoming guest message
  */
 export async function storeIncomingMessage(
@@ -252,7 +298,7 @@ export async function storeIncomingMessage(
 }
 
 /**
- * Store agent reply
+ * Store agent reply and update conversation metadata
  */
 export async function storeAgentReply(
   conversation_id: string,
@@ -260,13 +306,13 @@ export async function storeAgentReply(
   metadata?: Record<string, any>
 ) {
   try {
+    // 1. Store the message
     const { data, error } = await supabase
       .from('messages')
       .insert({
         conversation_id,
         role: 'assistant',
         content,
-        metadata: metadata || {},
       })
       .select()
       .single();
@@ -274,6 +320,23 @@ export async function storeAgentReply(
     if (error) {
       logger.error({ conversation_id, error }, 'Failed to store reply message');
       throw error;
+    }
+
+    // 2. Update conversation with detected language (persist language choice)
+    if (metadata?.language) {
+      const { error: updateError } = await supabase
+        .from('conversations')
+        .update({ language: metadata.language })
+        .eq('id', conversation_id);
+
+      if (updateError) {
+        logger.error({ conversation_id, updateError }, 'Failed to update conversation language');
+        // Don't throw - message was stored successfully, just language tracking failed
+      }
+    }
+
+    if (metadata) {
+      logger.debug({ conversation_id, metadata }, 'Agent reply metadata stored');
     }
 
     return data;
