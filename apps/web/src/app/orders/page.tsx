@@ -18,35 +18,18 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { createClient } from '@/lib/supabase/client';
 import {
-  IconClipboardList,
   IconDoor,
   IconClock,
-  IconShoppingCart,
 } from '@tabler/icons-react';
 import { ES } from '@/lib/spanish';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
 
 interface OrderItem {
-  id: string;
+  id: string | number;
   name: string;
   quantity: number;
 }
@@ -56,25 +39,56 @@ interface Order {
   room_number: string;
   guest_name: string;
   items: OrderItem[];
-  status: 'pending' | 'preparing' | 'ready' | 'delivered';
+  status: 'pending' | 'assigned' | 'preparing' | 'delivered' | 'rejected';
   created_at: string;
-  guest_id: string;
+  conversation_id: string | null;
+  notes?: string | null;
 }
 
-const STATUSES = ['pending', 'preparing', 'ready', 'delivered'] as const;
+const STATUSES = ['pending', 'assigned', 'preparing', 'delivered', 'rejected'] as const;
 const STATUS_LABELS: Record<typeof STATUSES[number], string> = {
   pending: ES.orders.pending,
+  assigned: 'Asignado',
   preparing: ES.orders.preparing,
-  ready: ES.orders.ready,
   delivered: ES.orders.delivered,
+  rejected: 'Rechazado',
 };
 
-const STATUS_COLORS: Record<typeof STATUSES[number], string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  preparing: 'bg-blue-100 text-blue-800',
-  ready: 'bg-green-100 text-green-800',
-  delivered: 'bg-gray-100 text-gray-800',
-};
+function normalizePedidoItems(rawItems: unknown): OrderItem[] {
+  if (!Array.isArray(rawItems)) {
+    return [];
+  }
+
+  return rawItems.map((item, index) => {
+    const record =
+      item && typeof item === 'object'
+        ? (item as Record<string, unknown>)
+        : {};
+
+    const name =
+      typeof record.item_name === 'string'
+        ? record.item_name
+        : typeof record.name === 'string'
+          ? record.name
+          : 'Artículo';
+
+    const quantityRaw =
+      typeof record.quantity === 'number'
+        ? record.quantity
+        : typeof record.quantity === 'string'
+          ? Number(record.quantity)
+          : 1;
+
+    return {
+      id:
+        typeof record.id === 'string' || typeof record.id === 'number'
+          ? record.id
+          : index,
+      name,
+      quantity: Number.isFinite(quantityRaw) && quantityRaw > 0 ? quantityRaw : 1,
+    };
+  });
+}
 
 export default function OrdersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -82,7 +96,6 @@ export default function OrdersPage() {
   const supabase = createClient();
 
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
   const [draggedOrder, setDraggedOrder] = useState<Order | null>(null);
 
   // Auth check
@@ -96,43 +109,58 @@ export default function OrdersPage() {
   useEffect(() => {
     const fetchOrders = async () => {
       try {
-        setLoading(true);
         const { data, error } = await supabase
-          .from('orders')
-          .select(`
-            id,
-            room_number,
-            guest_id,
-            status,
-            created_at,
-            guests (
-              name
-            ),
-            order_items (
-              id,
-              name,
-              quantity
-            )
-          `)
+          .from('pedidos')
+          .select('id, cloudbeds_room_id, conversation_id, items, status, created_at, notes')
           .order('created_at', { ascending: false });
 
         if (error) throw error;
 
-        const formattedOrders = (data || []).map((order: any) => ({
-          id: order.id,
-          room_number: order.room_number,
-          guest_name: order.guests?.name || 'Guest',
-          items: order.order_items || [],
-          status: order.status,
-          created_at: order.created_at,
-          guest_id: order.guest_id,
+        const conversationIds = (data || [])
+          .map((pedido) => pedido.conversation_id)
+          .filter((id): id is string => typeof id === 'string');
+
+        const uniqueConversationIds = Array.from(new Set(conversationIds));
+
+        const guestNamesByConversationId = new Map<string, string>();
+        if (uniqueConversationIds.length > 0) {
+          const { data: conversationsData, error: convError } = await supabase
+            .from('conversations')
+            .select('id, guests(name)')
+            .in('id', uniqueConversationIds);
+
+          if (convError) {
+            throw convError;
+          }
+
+          (conversationsData || []).forEach((conversation) => {
+            const guestRelation = conversation.guests;
+            const guestName = Array.isArray(guestRelation)
+              ? guestRelation[0]?.name
+              : guestRelation?.name;
+
+            if (typeof guestName === 'string') {
+              guestNamesByConversationId.set(conversation.id, guestName);
+            }
+          });
+        }
+
+        const formattedOrders = (data || []).map((pedido) => ({
+          id: pedido.id,
+          room_number: pedido.cloudbeds_room_id || '-',
+          guest_name:
+            (pedido.conversation_id && guestNamesByConversationId.get(pedido.conversation_id)) ||
+            'Huésped',
+          items: normalizePedidoItems(pedido.items),
+          status: pedido.status,
+          created_at: pedido.created_at,
+          conversation_id: pedido.conversation_id,
+          notes: pedido.notes,
         }));
 
-        setOrders(formattedOrders);
+        setOrders(formattedOrders as Order[]);
       } catch (err) {
         console.error('Error fetching orders:', err);
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -141,10 +169,10 @@ export default function OrdersPage() {
 
       // Real-time subscription
       const subscription = supabase
-        .channel('orders')
+        .channel('pedidos')
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'orders' },
+          { event: '*', schema: 'public', table: 'pedidos' },
           () => {
             fetchOrders();
           }
@@ -170,7 +198,7 @@ export default function OrdersPage() {
 
     try {
       const { error } = await supabase
-        .from('orders')
+        .from('pedidos')
         .update({ status })
         .eq('id', draggedOrder.id);
 
@@ -217,9 +245,10 @@ export default function OrdersPage() {
 
   const ordersByStatus = {
     pending: orders.filter((o) => o.status === 'pending'),
+    assigned: orders.filter((o) => o.status === 'assigned'),
     preparing: orders.filter((o) => o.status === 'preparing'),
-    ready: orders.filter((o) => o.status === 'ready'),
     delivered: orders.filter((o) => o.status === 'delivered'),
+    rejected: orders.filter((o) => o.status === 'rejected'),
   };
 
   return (

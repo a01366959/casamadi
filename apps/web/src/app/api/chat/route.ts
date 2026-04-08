@@ -1,14 +1,79 @@
-import { convertToModelMessages, streamText } from "ai";
-import { openai } from "@ai-sdk/openai";
-
 export const maxDuration = 30;
+
+interface ChatPart {
+  type?: string;
+  text?: string;
+}
+
+interface ChatMessage {
+  role?: string;
+  parts?: ChatPart[];
+  content?: string | ChatPart[];
+}
+
+interface ConversationLookupRow {
+  id: string;
+  hotel_id: string;
+  channel: 'whatsapp' | 'instagram' | 'messenger' | 'sandbox';
+  guests:
+    | {
+        phone: string;
+      }
+    | Array<{
+        phone: string;
+      }>
+    | null;
+}
 
 export async function POST(req: Request) {
   try {
-    const { messages, system } = await req.json();
+    const payload = (await req.json()) as { messages?: ChatMessage[] };
+    const messages = payload.messages;
     const url = new URL(req.url);
-    const hotelId = url.searchParams.get("hotel_id") || "hotel-bernal";
-    const phone = url.searchParams.get("phone") || "test-user";
+    const requestedHotelId = url.searchParams.get("hotel_id") || "hotel-bernal";
+    const requestedPhone = url.searchParams.get("phone") || "test-user";
+    const requestedChannel =
+      (url.searchParams.get("channel") as 'whatsapp' | 'instagram' | 'messenger' | 'sandbox' | null) ||
+      'sandbox';
+    const conversationId = url.searchParams.get("conversation_id");
+
+    let hotelId = requestedHotelId;
+    let phone = requestedPhone;
+    let channel: 'whatsapp' | 'instagram' | 'messenger' | 'sandbox' = requestedChannel;
+
+    if (conversationId) {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+      );
+
+      const { data: conversationData, error: conversationError } = await supabase
+        .from('conversations')
+        .select('id, hotel_id, channel, guests(phone)')
+        .eq('id', conversationId)
+        .single();
+
+      if (conversationError) {
+        throw new Error(`Conversation lookup failed: ${conversationError.message}`);
+      }
+
+      const conversation = conversationData as ConversationLookupRow;
+      const guestRelation = conversation.guests;
+      const guestPhone = Array.isArray(guestRelation)
+        ? guestRelation[0]?.phone
+        : guestRelation?.phone;
+
+      if (conversation.hotel_id) {
+        hotelId = conversation.hotel_id;
+      }
+      if (guestPhone) {
+        phone = guestPhone;
+      }
+      if (conversation.channel) {
+        channel = conversation.channel;
+      }
+    }
 
     console.log(`[Chat] Received request - hotel_id: ${hotelId}, phone: ${phone}`);
     console.log(`[Chat] Full messages array:`, JSON.stringify(messages, null, 2));
@@ -22,7 +87,7 @@ export async function POST(req: Request) {
     }
 
     // Extract the last user message
-    const lastUserMessage = messages.reverse().find((m: any) => m.role === "user");
+    const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
     if (!lastUserMessage) {
       return new Response(
         JSON.stringify({ error: "No user message found" }),
@@ -33,16 +98,16 @@ export async function POST(req: Request) {
     // assistant-ui uses 'parts' array format: parts: [{ type: 'text', text: '...' }]
     let userText = "";
     
-    if (Array.isArray((lastUserMessage as any).parts) && (lastUserMessage as any).parts.length > 0) {
+    if (Array.isArray(lastUserMessage.parts) && lastUserMessage.parts.length > 0) {
       // Extract text from first text-type part
-      const textPart = (lastUserMessage as any).parts.find((p: any) => p.type === "text");
+      const textPart = lastUserMessage.parts.find((part) => part.type === "text");
       userText = textPart?.text || "";
-    } else if (typeof (lastUserMessage as any).content === "string") {
+    } else if (typeof lastUserMessage.content === "string") {
       // Fallback: handle string content format
-      userText = (lastUserMessage as any).content;
-    } else if (Array.isArray((lastUserMessage as any).content) && (lastUserMessage as any).content.length > 0) {
+      userText = lastUserMessage.content;
+    } else if (Array.isArray(lastUserMessage.content) && lastUserMessage.content.length > 0) {
       // Fallback: handle content array format
-      userText = (lastUserMessage as any).content[0]?.text || "";
+      userText = lastUserMessage.content[0]?.text || "";
     }
 
     if (!userText) {
@@ -62,6 +127,7 @@ export async function POST(req: Request) {
         hotel_id: hotelId,
         phone,
         message: userText,
+        channel,
       }),
     });
 

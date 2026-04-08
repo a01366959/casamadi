@@ -38,7 +38,6 @@ import {
 import { ES } from '@/lib/spanish';
 import {
   Empty,
-  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -51,11 +50,35 @@ interface Conversation {
   last_message: string;
   last_message_at: string;
   unread_count: number;
-  status: 'active' | 'resolved' | 'inactive';
+  status: 'active' | 'resolved' | 'inactive' | 'human_active' | 'escalated' | 'takeover' | 'closed';
   guests: {
     name: string;
     phone: string;
   };
+}
+
+interface ConversationQueryRow {
+  id: string;
+  channel: 'whatsapp' | 'instagram' | 'messenger' | 'sandbox';
+  created_at: string;
+  updated_at: string;
+  status: 'active' | 'resolved' | 'inactive' | 'human_active' | 'escalated' | 'takeover' | 'closed';
+  guests:
+    | {
+        name: string;
+        phone: string;
+      }
+    | Array<{
+        name: string;
+        phone: string;
+      }>
+    | null;
+}
+
+interface MessagePreviewRow {
+  conversation_id: string;
+  content: string;
+  created_at: string;
 }
 
 export default function ConversationsPage() {
@@ -86,24 +109,54 @@ export default function ConversationsPage() {
           .select(`
             id,
             channel,
-            last_message,
-            last_message_at,
-            unread_count,
             status,
+            created_at,
+            updated_at,
             guests (
               name,
               phone
             )
           `)
-          .order('last_message_at', { ascending: false })
+          .order('updated_at', { ascending: false })
           .limit(50);
 
         if (fetchError) throw fetchError;
 
-        const conversations = (data || []).map((conv: any) => ({
-          ...conv,
-          guests: Array.isArray(conv.guests) ? conv.guests[0] : conv.guests,
-        }));
+        const conversationRows = (data || []) as ConversationQueryRow[];
+        const conversationIds = conversationRows.map((conv) => conv.id);
+
+        const messagePreviewByConversation = new Map<string, MessagePreviewRow>();
+        if (conversationIds.length > 0) {
+          const { data: messagesData, error: messagesError } = await supabase
+            .from('messages')
+            .select('conversation_id, content, created_at')
+            .in('conversation_id', conversationIds)
+            .order('created_at', { ascending: false });
+
+          if (messagesError) {
+            throw messagesError;
+          }
+
+          ((messagesData || []) as MessagePreviewRow[]).forEach((message) => {
+            if (!messagePreviewByConversation.has(message.conversation_id)) {
+              messagePreviewByConversation.set(message.conversation_id, message);
+            }
+          });
+        }
+
+        const conversations = conversationRows.map((conv) => {
+          const lastMessage = messagePreviewByConversation.get(conv.id);
+          return {
+            id: conv.id,
+            channel: conv.channel,
+            last_message: lastMessage?.content || 'Sin mensajes',
+            last_message_at: lastMessage?.created_at || conv.updated_at || conv.created_at,
+            unread_count: 0,
+            status: conv.status,
+            guests: Array.isArray(conv.guests) ? conv.guests[0] : conv.guests,
+          };
+        });
+
         setConversations(conversations as Conversation[]);
         setError(null);
       } catch (err) {
@@ -185,9 +238,16 @@ export default function ConversationsPage() {
     switch (status) {
       case 'active':
         return 'default';
+      case 'human_active':
+        return 'destructive';
       case 'resolved':
         return 'secondary';
+      case 'escalated':
+        return 'destructive';
+      case 'takeover':
+        return 'destructive';
       case 'inactive':
+      case 'closed':
         return 'outline';
       default:
         return 'outline';
@@ -196,10 +256,10 @@ export default function ConversationsPage() {
 
   const getChannelLabel = (channel: string): string => {
     const labels: Record<string, string> = {
-      whatsapp: '💬',
-      instagram: '📷',
-      messenger: '👥',
-      sandbox: '🧪',
+      whatsapp: 'WA',
+      instagram: 'IG',
+      messenger: 'MS',
+      sandbox: 'SB',
     };
     return labels[channel] || '';
   };
@@ -326,8 +386,12 @@ export default function ConversationsPage() {
                             className="text-xs flex-shrink-0"
                           >
                             {conversation.status === 'active' && '●'}
+                            {conversation.status === 'human_active' && '!'}
+                            {conversation.status === 'escalated' && '!'}
+                            {conversation.status === 'takeover' && '!'}
                             {conversation.status === 'resolved' && '✓'}
                             {conversation.status === 'inactive' && '○'}
+                            {conversation.status === 'closed' && '○'}
                           </Badge>
                         </div>
                       </button>

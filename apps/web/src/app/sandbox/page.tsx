@@ -30,11 +30,25 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { IconSettings } from '@tabler/icons-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
 import { useChatRuntime, AssistantChatTransport } from '@assistant-ui/react-ai-sdk';
 import { Thread } from '@/components/assistant-ui/thread';
 import { ThreadList } from '@/components/assistant-ui/thread-list';
+import { toast } from 'sonner';
+
+interface SandboxConversationResponse {
+  success: boolean;
+  conversation_id?: string;
+  error?: string;
+}
 
 export default function SandboxPage() {
   const { user, loading: authLoading } = useAuth();
@@ -42,7 +56,10 @@ export default function SandboxPage() {
 
   const [hotelId, setHotelId] = useState('hotel-bernal');
   const [phone, setPhone] = useState(() => `+1${Math.floor(Math.random() * 9000000000) + 1000000000}`);
+  const [channel, setChannel] = useState<'sandbox' | 'whatsapp' | 'instagram' | 'messenger'>('sandbox');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [initializingConversation, setInitializingConversation] = useState(false);
 
   // Check auth access
   useEffect(() => {
@@ -51,15 +68,57 @@ export default function SandboxPage() {
     }
   }, [user, authLoading, router]);
 
-  // Create a new chat session
-  const createNewSession = () => {
-    setPhone(`+1${Math.floor(Math.random() * 9000000000) + 1000000000}`);
+  const initializeConversation = async (
+    nextHotelId: string,
+    nextPhone: string,
+    nextChannel: 'sandbox' | 'whatsapp' | 'instagram' | 'messenger'
+  ) => {
+    setInitializingConversation(true);
+    try {
+      const response = await fetch('/api/sandbox/conversation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          hotel_id: nextHotelId,
+          phone: nextPhone,
+          channel: nextChannel,
+        }),
+      });
+
+      const data = (await response.json()) as SandboxConversationResponse;
+
+      if (!response.ok || !data.success || !data.conversation_id) {
+        throw new Error(data.error || 'No se pudo inicializar la conversacion');
+      }
+
+      setConversationId(data.conversation_id);
+    } catch (error) {
+      setConversationId(null);
+      toast.warning(error instanceof Error ? error.message : 'No se pudo crear la conversacion');
+    } finally {
+      setInitializingConversation(false);
+    }
   };
+
+  // Create and persist a new chat session
+  const createNewSession = async () => {
+    const nextPhone = `+1${Math.floor(Math.random() * 9000000000) + 1000000000}`;
+    setPhone(nextPhone);
+    await initializeConversation(hotelId, nextPhone, channel);
+  };
+
+  // Initialize first sandbox conversation on page load
+  useEffect(() => {
+    void initializeConversation(hotelId, phone, channel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Setup assistant-ui runtime with our API endpoint
   const runtime = useChatRuntime({
     transport: new AssistantChatTransport({
-      api: `/api/chat?hotel_id=${hotelId}&phone=${phone}`,
+      api: `/api/chat?hotel_id=${hotelId}&phone=${phone}&channel=${channel}${conversationId ? `&conversation_id=${conversationId}` : ''}`,
     }),
   });
 
@@ -115,6 +174,28 @@ export default function SandboxPage() {
                 </div>
 
                 <div>
+                  <Label htmlFor="channel" className="text-sm font-medium">
+                    Channel
+                  </Label>
+                  <Select
+                    value={channel}
+                    onValueChange={(value) =>
+                      setChannel(value as 'sandbox' | 'whatsapp' | 'instagram' | 'messenger')
+                    }
+                  >
+                    <SelectTrigger id="channel" className="mt-2">
+                      <SelectValue placeholder="Select channel" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sandbox">Sandbox</SelectItem>
+                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                      <SelectItem value="instagram">Instagram</SelectItem>
+                      <SelectItem value="messenger">Messenger</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
                   <Label htmlFor="phone" className="text-sm font-medium">
                     Guest Phone
                   </Label>
@@ -128,11 +209,14 @@ export default function SandboxPage() {
                 </div>
 
                 <Button
-                  onClick={createNewSession}
+                  onClick={() => {
+                    void createNewSession();
+                  }}
                   variant="outline"
                   className="w-full"
+                  disabled={initializingConversation}
                 >
-                  New Test Session
+                  {initializingConversation ? 'Creando conversacion...' : 'New Test Session'}
                 </Button>
               </div>
             </SheetContent>

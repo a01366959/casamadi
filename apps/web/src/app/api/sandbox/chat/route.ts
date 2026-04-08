@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { hotel_id, phone, message } = await request.json();
+    const { hotel_id, phone, message, channel } = await request.json();
 
     if (!message || !hotel_id || !phone) {
       return NextResponse.json(
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
         hotel_id,
         phone,
         message,
-        channel: 'sandbox',
+        channel: channel || 'sandbox',
       }),
     });
 

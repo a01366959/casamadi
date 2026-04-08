@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useAuth } from "@/lib/supabase/auth-provider"
+import { useUserRole } from "@/lib/supabase/use-user-role"
 import { NavMain } from "@/components/nav-main"
 import { NavAdmin } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
@@ -20,6 +21,8 @@ import {
   IconChecklist, 
   IconFlask, 
   IconUsers,
+  IconToolsKitchen2,
+  IconArchive,
   IconHotelService,
 } from "@tabler/icons-react"
 import { ES } from "@/lib/spanish"
@@ -67,22 +70,26 @@ const data = {
       url: "/admin/users",
       icon: <IconUsers className="h-4 w-4" />,
     },
+    {
+      title: ES.nav.menu,
+      url: "/admin/menu",
+      icon: <IconToolsKitchen2 className="h-4 w-4" />,
+    },
+    {
+      title: ES.nav.inventory,
+      url: "/admin/inventory",
+      icon: <IconArchive className="h-4 w-4" />,
+    },
   ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
-  const userMetadata = user?.user_metadata
-  const userRole =
-    userMetadata &&
-    typeof userMetadata === 'object' &&
-    'role' in userMetadata &&
-    typeof userMetadata.role === 'string'
-      ? userMetadata.role
-      : 'staff'
+  const { role, loading: roleLoading } = useUserRole()
+  const userRole = role || 'staff'
 
   // Show admin items based on role
-  const adminItems = userRole === 'admin' ? data.admin : []
+  const adminItems = role === 'admin' ? data.admin : []
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -94,6 +101,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {adminItems.length > 0 && <NavAdmin items={adminItems} />}
       </SidebarContent>
       <SidebarFooter>
+        {process.env.NODE_ENV === 'development' && user?.email ? (
+          <div className="px-2 pb-2 text-[10px] text-muted-foreground">
+            {roleLoading ? 'role: loading...' : `role: ${userRole} (${user.email})`}
+          </div>
+        ) : null}
         <NavUser 
           user={{
             name: user?.user_metadata?.name || user?.email || 'Staff',

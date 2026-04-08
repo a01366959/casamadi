@@ -24,7 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/supabase/auth-provider';
 import { useRouter } from 'next/navigation';
-import { IconChecks, IconClock, IconAlertCircle } from '@tabler/icons-react';
+import { ES } from '@/lib/spanish';
 
 interface Task {
   id: string;
@@ -39,11 +39,11 @@ interface Task {
 }
 
 const TASK_TYPE_LABELS: Record<string, string> = {
-  extra_towel: 'Extra Towel',
-  extra_linens: 'Linens',
-  maintenance: 'Maintenance',
-  cleaning: 'Cleaning',
-  urgent: 'Urgent',
+  extra_towel: 'Toallas extras',
+  extra_linens: 'Sabanas extras',
+  maintenance: 'Mantenimiento',
+  cleaning: 'Limpieza',
+  urgent: 'Urgente',
 };
 
 const TASK_TYPE_COLORS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -213,7 +213,7 @@ export default function TasksPage() {
               </BreadcrumbItem>
               <BreadcrumbSeparator className="hidden md:block" />
               <BreadcrumbItem>
-                <BreadcrumbPage>Tasks</BreadcrumbPage>
+                <BreadcrumbPage>{ES.nav.tasks}</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
@@ -221,14 +221,14 @@ export default function TasksPage() {
 
         <div className="flex flex-1 flex-col gap-4 p-4">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Tasks</h1>
-            <p className="text-slate-600 text-sm mt-1">Manage guest requests and housekeeping tasks</p>
+            <h1 className="text-3xl font-bold text-slate-900">{ES.nav.tasks}</h1>
+            <p className="text-slate-600 text-sm mt-1">Gestiona solicitudes de huespedes y tareas de operacion</p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600">Pending</CardTitle>
+                <CardTitle className="text-sm font-medium text-slate-600">Pendientes</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">
@@ -239,7 +239,7 @@ export default function TasksPage() {
 
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600">Assigned</CardTitle>
+                <CardTitle className="text-sm font-medium text-slate-600">Asignadas</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">
@@ -250,7 +250,7 @@ export default function TasksPage() {
 
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-slate-600">Completed</CardTitle>
+                <CardTitle className="text-sm font-medium text-slate-600">Completadas</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">
@@ -262,16 +262,16 @@ export default function TasksPage() {
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full gap-2" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-              <TabsTrigger value="pending">Pending</TabsTrigger>
-              <TabsTrigger value="assigned">Assigned</TabsTrigger>
-              <TabsTrigger value="completed">Completed</TabsTrigger>
+              <TabsTrigger value="pending">Pendientes</TabsTrigger>
+              <TabsTrigger value="assigned">Asignadas</TabsTrigger>
+              <TabsTrigger value="completed">Completadas</TabsTrigger>
             </TabsList>
 
             <TabsContent value="pending" className="space-y-4 mt-4">
               {filteredTasks.length === 0 ? (
                 <Card>
                   <CardContent className="pt-6 text-center">
-                    <p className="text-muted-foreground">No pending tasks</p>
+                    <p className="text-muted-foreground">No hay tareas pendientes</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -290,7 +290,7 @@ export default function TasksPage() {
               {filteredTasks.length === 0 ? (
                 <Card>
                   <CardContent className="pt-6 text-center">
-                    <p className="text-muted-foreground">No assigned tasks</p>
+                    <p className="text-muted-foreground">No hay tareas asignadas</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -309,7 +309,7 @@ export default function TasksPage() {
               {filteredTasks.length === 0 ? (
                 <Card>
                   <CardContent className="pt-6 text-center">
-                    <p className="text-muted-foreground">No completed tasks</p>
+                    <p className="text-muted-foreground">No hay tareas completadas</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -345,7 +345,7 @@ function TaskCard({
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-lg">Room {task.cloudbeds_room_id}</CardTitle>
+              <CardTitle className="text-lg">Habitacion {task.cloudbeds_room_id}</CardTitle>
               <Badge variant={TASK_TYPE_COLORS[task.task_type] || 'secondary'}>
                 {TASK_TYPE_LABELS[task.task_type] || task.task_type}
               </Badge>
@@ -366,12 +366,12 @@ function TaskCard({
           <div className="flex items-center gap-2">
             {task.status === 'pending' && (
               <Button size="sm" onClick={onAssign} variant="default">
-                Assign
+                Asignar
               </Button>
             )}
             {task.status === 'assigned' && (
               <Button size="sm" onClick={onComplete} variant="default">
-                Complete
+                Completar
               </Button>
             )}
           </div>

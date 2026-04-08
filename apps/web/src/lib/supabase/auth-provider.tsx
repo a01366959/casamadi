@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from './client';
-import type { Session } from '@supabase/supabase-js';
+import type { Session, SupabaseClient } from '@supabase/supabase-js';
 
 const HOTEL_BERNAL_ID = '572ba7e4-79f9-4169-a681-6a76a96c47a6';
 
@@ -12,12 +12,13 @@ type User = {
   user_metadata?: {
     name?: string;
     avatar_url?: string;
+    role?: string;
   };
 };
 
 // Note: User records are auto-created via Postgres trigger on auth signup
 // This function is kept as a safety check (should rarely if ever be needed)
-async function ensureUserExists(supabase: any, userId: string, email: string) {
+async function ensureUserExists(supabase: SupabaseClient, userId: string, email: string) {
   try {
     const { data: existingUser, error: fetchError } = await supabase
       .from('users')
@@ -39,6 +40,26 @@ async function ensureUserExists(supabase: any, userId: string, email: string) {
     }
   } catch (err) {
     console.error('Error ensuring user exists:', err);
+  }
+}
+
+async function resolveUserRole(supabase: SupabaseClient, userId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('Error resolving user role from users table:', error);
+      return null;
+    }
+
+    return typeof data?.role === 'string' ? data.role : null;
+  } catch (err) {
+    console.warn('Unexpected error resolving user role:', err);
+    return null;
   }
 }
 
@@ -74,10 +95,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       if (session?.user) {
         await ensureUserExists(supabase, session.user.id, session.user.email || '');
+        const roleFromDb = await resolveUserRole(supabase, session.user.id);
+        const baseMetadata =
+          session.user.user_metadata && typeof session.user.user_metadata === 'object'
+            ? session.user.user_metadata
+            : {};
+
         setUser({
           id: session.user.id,
           email: session.user.email,
-          user_metadata: session.user.user_metadata,
+          user_metadata: {
+            ...baseMetadata,
+            role:
+              roleFromDb ||
+              (typeof baseMetadata.role === 'string' ? baseMetadata.role : undefined),
+          },
         });
       }
       setLoading(false);
@@ -91,10 +123,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       if (session?.user) {
         await ensureUserExists(supabase, session.user.id, session.user.email || '');
+        const roleFromDb = await resolveUserRole(supabase, session.user.id);
+        const baseMetadata =
+          session.user.user_metadata && typeof session.user.user_metadata === 'object'
+            ? session.user.user_metadata
+            : {};
+
         setUser({
           id: session.user.id,
           email: session.user.email,
-          user_metadata: session.user.user_metadata,
+          user_metadata: {
+            ...baseMetadata,
+            role:
+              roleFromDb ||
+              (typeof baseMetadata.role === 'string' ? baseMetadata.role : undefined),
+          },
         });
       } else {
         setUser(null);

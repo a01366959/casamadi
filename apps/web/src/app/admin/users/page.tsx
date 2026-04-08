@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createClient } from '@/lib/supabase/client';
 import { ES } from '@/lib/spanish';
+import { useUserRole } from '@/lib/supabase/use-user-role';
 import { columns, StaffUser } from './columns';
 import { DataTable } from './data-table';
 import { UserDrawer } from './user-drawer';
@@ -40,8 +41,11 @@ import { useCallback } from 'react';
 
 export default function UsersPage() {
   const { user, loading: authLoading } = useAuth();
+  const { role: currentRole, loading: roleLoading } = useUserRole();
   const router = useRouter();
   const supabase = createClient();
+
+  const isExplicitNonAdmin = currentRole !== null && currentRole !== 'admin';
 
   const [users, setUsers] = useState<StaffUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,8 +82,13 @@ export default function UsersPage() {
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login');
+      return;
     }
-  }, [user, authLoading, router]);
+
+    if (!authLoading && !roleLoading && isExplicitNonAdmin) {
+      router.push('/dashboard');
+    }
+  }, [user, authLoading, roleLoading, isExplicitNonAdmin, router]);
 
   // Fetch users on mount
   useEffect(() => {
@@ -145,7 +154,7 @@ export default function UsersPage() {
     };
   }, []);
 
-  if (authLoading) {
+  if (authLoading || roleLoading) {
     return (
       <SidebarProvider>
         <AppSidebar />

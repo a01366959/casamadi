@@ -27,56 +27,70 @@ interface SectionGroup {
 }
 
 const SECTION_LABELS: Record<string, string> = {
-  desayuno: '🌅 Desayuno',
-  comida_cena: '🍽️ Comida & Cena',
-  '24_7': '⏰ Disponible 24/7',
+  desayuno: 'Desayuno',
+  comida_cena: 'Comida y cena',
+  '24_7': 'Disponible 24/7',
 };
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ hotelId: string }> }
 ) {
   try {
     const { hotelId } = await params;
-    console.log('Menu API called with hotelId:', hotelId);
+    console.log('Menu API called with hotelId', hotelId);
     
-    // Try to get hotel: first by exact id, then by name pattern
-    let { data: hotelsData } = await supabase
+    const { data: hotelsData, error: hotelsError } = await supabase
       .from('hotels')
-      .select('id');
+      .select('id, slug, name');
+
+    if (hotelsError) {
+      console.error('Hotels query failed', hotelsError);
+      return NextResponse.json({ error: 'Failed to resolve hotel' }, { status: 500 });
+    }
+
+    type HotelRow = {
+      id: string;
+      slug?: string | null;
+      name?: string | null;
+    };
+
+    const hotels = (hotelsData || []) as HotelRow[];
     
-    console.log('All hotels:', hotelsData);
-    
-    // Find matching hotel
     let resolvedHotelId: string | null = null;
-    
-    // Try exact UUID match
-    const hotelByUUID = hotelsData?.find(h => h.id === hotelId);
+
+    // Single-hotel fallback: if only one hotel exists, use it.
+    if (hotels.length === 1) {
+      resolvedHotelId = hotels[0].id;
+    }
+
+    // Try exact UUID match.
+    const hotelByUUID = hotels.find((hotel) => hotel.id === hotelId);
     if (hotelByUUID) {
       resolvedHotelId = hotelByUUID.id;
-      console.log('Found hotel by UUID:', resolvedHotelId);
     }
-    
-    // Try name pattern match (hotel-bernal → Hotel Bernal)
+
+    // Try slug match.
+    if (!resolvedHotelId) {
+      const hotelBySlug = hotels.find((hotel) => hotel.slug === hotelId);
+      if (hotelBySlug) {
+        resolvedHotelId = hotelBySlug.id;
+      }
+    }
+
+    // Try name pattern match (hotel-bernal -> Hotel Bernal).
     if (!resolvedHotelId && hotelId.includes('-')) {
       const searchName = hotelId
         .split('-')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
-      
-      console.log('Searching for hotel by name pattern:', searchName);
-      
-      const { data: hotelsByName } = await supabase
-        .from('hotels')
-        .select('id, name');
-      
-      const matchedHotel = hotelsByName?.find(h => 
-        h.name?.toLowerCase().includes(searchName.toLowerCase())
+
+      const matchedHotel = hotels.find((hotel) =>
+        (hotel.name || '').toLowerCase().includes(searchName.toLowerCase())
       );
-      
+
       if (matchedHotel) {
         resolvedHotelId = matchedHotel.id;
-        console.log('Found hotel by name:', resolvedHotelId, matchedHotel.name);
       }
     }
     
@@ -94,24 +108,25 @@ export async function GET(
       .order('section', { ascending: true })
       .order('name', { ascending: true });
 
-    console.log('Menu items fetch:', { itemsCount: items?.length, error });
+    console.log('Menu items fetch', { itemsCount: items?.length || 0 });
 
     if (error) {
-      console.error('Menu items error:', error);
+      console.error('Menu items error', error);
       return NextResponse.json({ error: 'Failed to fetch menu', details: error }, { status: 500 });
     }
 
-    // Group by section
-    const grouped: Record<string, any[]> = {};
-    (items || []).forEach((item: any) => {
+    // Group by section.
+    const grouped: Record<string, MenuItem[]> = {};
+    (items || []).forEach((item) => {
+      const typedItem = item as MenuItem;
       const section = item.section || '24_7';
       if (!grouped[section]) {
         grouped[section] = [];
       }
-      grouped[section].push(item);
+      grouped[section].push(typedItem);
     });
 
-    // Format response with labels
+    // Format response with labels.
     const sections: SectionGroup[] = Object.entries(grouped).map(([section, sectionItems]) => ({
       section,
       label: SECTION_LABELS[section] || section,

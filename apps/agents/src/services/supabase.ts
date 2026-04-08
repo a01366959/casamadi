@@ -22,18 +22,33 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
  */
 export async function getHotelUuid(hotel_slug: string): Promise<string> {
   try {
+    // In current environments, hotel identifier is usually stored directly in hotels.id
     const { data, error } = await supabase
+      .from('hotels')
+      .select('id')
+      .eq('id', hotel_slug)
+      .single();
+
+    if (!error && data?.id) {
+      return data.id;
+    }
+
+    // Backward compatibility for environments that added a separate slug column manually.
+    const { data: slugData, error: slugError } = await supabase
       .from('hotels')
       .select('id')
       .eq('slug', hotel_slug)
       .single();
 
-    if (error) {
-      logger.error({ hotel_slug, error }, 'Failed to resolve hotel slug to UUID');
-      throw error;
+    if (slugError || !slugData?.id) {
+      logger.error(
+        { hotel_slug, error: slugError || error },
+        'Failed to resolve hotel identifier to hotel id'
+      );
+      throw slugError || error;
     }
 
-    return data.id;
+    return slugData.id;
   } catch (err) {
     logger.error({ hotel_slug, err }, 'Hotel slug resolution error');
     throw err;
@@ -97,8 +112,6 @@ export async function getOrCreateGuest(
           id: randomUUID(),
           hotel_id: hotelUuid,
           phone: guest_phone,
-          channel,
-          channel_user_id: guest_phone, // Use phone as channel ID for sandbox
         })
         .select('id')
         .single();
@@ -145,7 +158,7 @@ export async function getOrCreateConversation(
       .eq('hotel_id', hotelUuid)
       .eq('guest_id', guest.id)
       .eq('channel', channel)
-      .eq('status', 'active')
+      .in('status', ['active', 'human_active', 'takeover', 'escalated'])
       .order('created_at', { ascending: false })
       .limit(1)
       .single();

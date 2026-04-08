@@ -15,6 +15,12 @@ interface SandboxMessage {
   channel?: string; // Default to 'sandbox'
 }
 
+interface SandboxConversationRequest {
+  hotel_id: string;
+  phone: string;
+  channel?: string;
+}
+
 interface SandboxResponse {
   success: boolean;
   message_id?: string;
@@ -25,6 +31,50 @@ interface SandboxResponse {
 }
 
 export default async function sandboxRoutes(app: FastifyInstance) {
+  /**
+   * POST /api/sandbox/conversation
+   * Create (or get existing) conversation for sandbox session initialization
+   */
+  app.post<{ Body: SandboxConversationRequest }>('/conversation', async (request, reply) => {
+    try {
+      const { hotel_id, phone, channel = 'sandbox' } = request.body;
+
+      if (!hotel_id || !phone) {
+        reply.code(400);
+        return {
+          success: false,
+          error: 'Missing required fields: hotel_id, phone',
+        };
+      }
+
+      const conversation = await getOrCreateConversation(hotel_id, phone, channel);
+
+      logger.info(
+        {
+          hotel_id,
+          conversationId: conversation.id,
+          channel,
+          phone,
+        },
+        'Sandbox conversation initialized'
+      );
+
+      return {
+        success: true,
+        conversation_id: conversation.id,
+        status: conversation.status,
+        language: conversation.language || 'es',
+      };
+    } catch (err) {
+      logger.error({ err, body: request.body }, 'Sandbox conversation init error');
+      reply.code(500);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Internal server error',
+      };
+    }
+  });
+
   /**
    * POST /api/sandbox/chat
    * Simulate a WhatsApp message without Meta integration
@@ -216,6 +266,14 @@ async function processMessageSync(
       { hotel_id, conversationId: conversation.id, phone },
       'Conversation ready'
     );
+
+    if (conversation.status === 'human_active') {
+      console.log(`[Sandbox:Process] Conversation ${conversation.id} is in human takeover mode`);
+      return {
+        reply: 'La conversacion esta en modo staff. Libera el takeover para reactivar la IA.',
+        language: conversation.language || 'es',
+      };
+    }
 
     console.log(`[Sandbox:Process] Step 3: Storing incoming message`);
     // 3. Store incoming message

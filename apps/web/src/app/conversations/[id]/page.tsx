@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { createClient } from '@/lib/supabase/client';
 import {
   IconArrowLeft,
@@ -46,11 +47,13 @@ import { ES } from '@/lib/spanish';
 import {
   Empty,
   EmptyContent,
-  EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { AssistantRuntimeProvider } from '@assistant-ui/react';
+import { useChatRuntime, AssistantChatTransport } from '@assistant-ui/react-ai-sdk';
+import { Thread } from '@/components/assistant-ui/thread';
 
 interface Message {
   id: string;
@@ -62,7 +65,8 @@ interface Message {
 interface ConversationDetail {
   id: string;
   channel: 'whatsapp' | 'instagram' | 'messenger' | 'sandbox';
-  status: 'active' | 'resolved' | 'inactive';
+  status: 'active' | 'resolved' | 'inactive' | 'human_active';
+  assigned_to?: string | null;
   created_at: string;
   guests: {
     name: string;
@@ -77,13 +81,6 @@ const CHANNEL_ICONS = {
   instagram: IconBrandInstagram,
   messenger: IconBrandFacebook,
   sandbox: IconFlask,
-};
-
-const CHANNEL_COLORS: Record<string, string> = {
-  whatsapp: 'bg-green-100 text-green-800',
-  instagram: 'bg-pink-100 text-pink-800',
-  messenger: 'bg-blue-100 text-blue-800',
-  sandbox: 'bg-purple-100 text-purple-800',
 };
 
 export default function ConversationThreadPage() {
@@ -209,13 +206,18 @@ export default function ConversationThreadPage() {
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !conversationId) return;
 
+    if (conversation?.status !== 'human_active') {
+      setError('Toma control de la conversacion para responder como staff');
+      return;
+    }
+
     try {
       setSendingMessage(true);
       const { error: insertError } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversationId,
-          role: 'user',
+          role: 'assistant',
           content: messageInput,
           created_at: new Date().toISOString(),
         });
@@ -229,6 +231,64 @@ export default function ConversationThreadPage() {
       setSendingMessage(false);
     }
   };
+
+  const handleTakeover = async () => {
+    if (!user || !conversationId) return;
+
+    try {
+      const { error: updateError } = await supabase
+        .from('conversations')
+        .update({ status: 'human_active', assigned_to: user.id })
+        .eq('id', conversationId);
+
+      if (updateError) throw updateError;
+
+      setConversation((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'human_active',
+              assigned_to: user.id,
+            }
+          : prev
+      );
+    } catch (err) {
+      console.error('Takeover error', err);
+      setError('No se pudo tomar control');
+    }
+  };
+
+  const handleRelease = async () => {
+    if (!conversationId) return;
+
+    try {
+      const { error: updateError } = await supabase
+        .from('conversations')
+        .update({ status: 'active', assigned_to: null })
+        .eq('id', conversationId);
+
+      if (updateError) throw updateError;
+
+      setConversation((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'active',
+              assigned_to: null,
+            }
+          : prev
+      );
+    } catch (err) {
+      console.error('Release error', err);
+      setError('No se pudo liberar la conversacion');
+    }
+  };
+
+  const runtime = useChatRuntime({
+    transport: new AssistantChatTransport({
+      api: `/api/chat?conversation_id=${conversationId}`,
+    }),
+  });
 
   if (authLoading) {
     return (
@@ -327,12 +387,6 @@ export default function ConversationThreadPage() {
   }
 
   const ChannelIcon = CHANNEL_ICONS[conversation.channel];
-  const statusColor = {
-    active: 'gap-1.5',
-    resolved: 'gap-1.5',
-    inactive: 'gap-1.5',
-  };
-
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -384,76 +438,100 @@ export default function ConversationThreadPage() {
                     {ES.common[conversation.status]}
                   </Badge>
                 </div>
+                <div className="mt-3 flex items-center gap-2">
+                  {conversation.status !== 'human_active' ? (
+                    <Button size="sm" onClick={handleTakeover}>
+                      Tomar control
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={handleRelease}>
+                      Liberar a IA
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
             </Card>
 
-            {/* Messages scroll area */}
-            <ScrollArea
-              ref={scrollRef}
-              className="flex-1 rounded-lg border bg-muted/30 p-4"
-            >
-              {messages.length === 0 ? (
-                <Empty>
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <IconSend />
-                    </EmptyMedia>
-                    <EmptyTitle>{ES.conversations.noMessages}</EmptyTitle>
-                  </EmptyHeader>
-                </Empty>
-              ) : (
-                <div className="space-y-4">
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${
-                        message.role === 'user' ? 'justify-end' : 'justify-start'
-                      }`}
-                    >
-                      <div
-                        className={`max-w-xs rounded-lg px-3 py-2 text-sm ${
-                          message.role === 'user'
-                            ? 'bg-primary text-primary-foreground'
-                            : message.role === 'system'
-                            ? 'bg-muted text-muted-foreground italic'
-                            : 'bg-secondary text-secondary-foreground'
-                        }`}
-                      >
-                        <p>{message.content}</p>
-                        <p className="mt-1 text-xs opacity-70">
-                          {new Date(message.created_at).toLocaleTimeString('es-MX', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
+            <Tabs defaultValue="history" className="flex flex-1 flex-col gap-2">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="history">Historial</TabsTrigger>
+                <TabsTrigger value="assistant">Assistant UI</TabsTrigger>
+              </TabsList>
 
-            {/* Message input */}
-            <div className="flex gap-2">
-              <Input
-                placeholder={ES.conversations.typePlaceholder}
-                value={messageInput}
-                onChange={(e) => setMessageInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
-                disabled={sendingMessage}
-              />
-              <Button
-                onClick={handleSendMessage}
-                disabled={!messageInput.trim() || sendingMessage}
-              >
-                <IconSend className="h-4 w-4" />
-              </Button>
-            </div>
+              <TabsContent value="history" className="flex flex-1 flex-col gap-2">
+                <ScrollArea
+                  ref={scrollRef}
+                  className="flex-1 rounded-lg border bg-muted/30 p-4"
+                >
+                  {messages.length === 0 ? (
+                    <Empty>
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <IconSend />
+                        </EmptyMedia>
+                        <EmptyTitle>{ES.conversations.noMessages}</EmptyTitle>
+                      </EmptyHeader>
+                    </Empty>
+                  ) : (
+                    <div className="space-y-4">
+                      {messages.map((message) => (
+                        <div
+                          key={message.id}
+                          className={`flex ${
+                            message.role === 'user' ? 'justify-end' : 'justify-start'
+                          }`}
+                        >
+                          <div
+                            className={`max-w-xs rounded-lg px-3 py-2 text-sm ${
+                              message.role === 'user'
+                                ? 'bg-primary text-primary-foreground'
+                                : message.role === 'system'
+                                ? 'bg-muted text-muted-foreground italic'
+                                : 'bg-secondary text-secondary-foreground'
+                            }`}
+                          >
+                            <p>{message.content}</p>
+                            <p className="mt-1 text-xs opacity-70">
+                              {new Date(message.created_at).toLocaleTimeString('es-MX', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+
+                <div className="flex gap-2">
+                  <Input
+                    placeholder={ES.conversations.typePlaceholder}
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    disabled={sendingMessage}
+                  />
+                  <Button
+                    onClick={handleSendMessage}
+                    disabled={!messageInput.trim() || sendingMessage}
+                  >
+                    <IconSend className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="assistant" className="flex flex-1 overflow-hidden rounded-lg border">
+                <AssistantRuntimeProvider runtime={runtime}>
+                  <Thread />
+                </AssistantRuntimeProvider>
+              </TabsContent>
+            </Tabs>
 
             {error && (
               <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
